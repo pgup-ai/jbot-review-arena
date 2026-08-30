@@ -29,23 +29,23 @@ class WorkerFailure extends Error {
   }
 }
 
-const SECRETS_ENV = 'JBOT_AUTH_JSON';
+const CONTAINER_AUTH_ENV = 'JBOT_AUTH_JSON';
+const VARS_ENV = 'JBOT_VARS_JSON';
 const GITHUB_TOKEN_NAMES = new Set(['GITHUB_TOKEN', 'GH_TOKEN']);
 
-export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
-  const raw = env[SECRETS_ENV]?.trim();
-  if (!raw) return {};
-  let secrets: unknown;
+function readAuthBundle(raw: string | undefined, name: string): Record<string, string> {
+  if (!raw?.trim()) return {};
+  let bundle: unknown;
   try {
-    secrets = JSON.parse(raw);
+    bundle = JSON.parse(raw);
   } catch {
-    throw new Error(`${SECRETS_ENV} must be valid JSON.`);
+    throw new Error(`${name} must be valid JSON.`);
   }
-  if (!secrets || typeof secrets !== 'object' || Array.isArray(secrets)) {
-    throw new Error(`${SECRETS_ENV} must be a JSON object.`);
+  if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+    throw new Error(`${name} must be a JSON object.`);
   }
   return Object.fromEntries(
-    Object.entries(secrets).filter(
+    Object.entries(bundle).filter(
       (entry): entry is [string, string] =>
         typeof entry[1] === 'string' &&
         Boolean(entry[1]) &&
@@ -53,6 +53,18 @@ export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, 
         !GITHUB_TOKEN_NAMES.has(entry[0]),
     ),
   );
+}
+
+export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): {
+  authEnvironment: Record<string, string>;
+  secretValues: string[];
+} {
+  const variables = readAuthBundle(env[VARS_ENV], VARS_ENV);
+  const secrets = readAuthBundle(env[CONTAINER_AUTH_ENV], CONTAINER_AUTH_ENV);
+  return {
+    authEnvironment: { ...variables, ...secrets },
+    secretValues: Object.values(secrets),
+  };
 }
 
 function run(command: string, args: string[], cwd?: string): string {
@@ -121,7 +133,7 @@ export function dockerRunArgs(
     '--env',
     'MODEL',
     '--env',
-    SECRETS_ENV,
+    CONTAINER_AUTH_ENV,
     '--entrypoint',
     'node',
     `${manifest.jbot.imageRef.split(':').slice(0, -1).join(':')}@${manifest.jbot.imageDigest}`,
@@ -244,18 +256,19 @@ export function runArenaWorker(params: {
   manifestPath: string;
   workRoot: string;
   authEnvironment: Record<string, string>;
+  secretValues: string[];
 }): ArenaResultV1 {
   const startedAt = performance.now();
   const workspace = resolve(params.workRoot, 'workspace');
   const outputDirectory = resolve(params.workRoot, 'output');
   mkdirSync(outputDirectory, { recursive: true });
-  const secrets = Object.values(params.authEnvironment);
+  const secrets = params.secretValues;
   try {
     materializeTarget(params.manifest, workspace);
     pullAndVerifyImage(params.manifest);
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      [SECRETS_ENV]: JSON.stringify(params.authEnvironment),
+      [CONTAINER_AUTH_ENV]: JSON.stringify(params.authEnvironment),
       MODEL: params.model.model,
     };
     const timeout = (params.manifest.reviewConfig.timeBudgetMinutes + 5) * 60_000;
@@ -336,7 +349,7 @@ function main(): void {
   const modelIndex = Number(process.env.MODEL_INDEX);
   const model = manifest.models[modelIndex];
   if (!model) throw new Error('MODEL_INDEX is not present in the comparison manifest.');
-  const authEnvironment = readJbotAuthEnvironment(process.env);
+  const { authEnvironment, secretValues } = readJbotAuthEnvironment(process.env);
   mkdirSync(artifactDirectory, { recursive: true });
   const result = runArenaWorker({
     manifest,
@@ -344,6 +357,7 @@ function main(): void {
     manifestPath,
     workRoot,
     authEnvironment,
+    secretValues,
   });
   writeFileSync(join(artifactDirectory, 'result.json'), `${JSON.stringify(result)}\n`, {
     flag: 'wx',
@@ -354,7 +368,7 @@ function main(): void {
     const telemetry = readFileSync(telemetryPath, 'utf8');
     writeFileSync(
       join(artifactDirectory, 'telemetry.jsonl'),
-      redactSecrets(telemetry, expandSecretsForRedaction(Object.values(authEnvironment))),
+      redactSecrets(telemetry, expandSecretsForRedaction(secretValues)),
     );
   } catch {
     // Telemetry is unavailable for setup failures and some opaque backends.

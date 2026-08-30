@@ -15,7 +15,9 @@ it('keeps workflow fan-out, failure publication, artifacts, and permissions expl
   assert.match(workflow, /image="\$JBOT_IMAGE_REPOSITORY:latest"/);
   assert.doesNotMatch(workflow, /JBOT_COMMIT_SHA/);
   assert.match(workflow, /JBOT_AUTH_JSON: \$\{\{ toJSON\(secrets\) \}\}/);
+  assert.match(workflow, /JBOT_VARS_JSON: \$\{\{ toJSON\(vars\) \}\}/);
   assert.doesNotMatch(workflow, /secrets\.[A-Z]/);
+  assert.doesNotMatch(workflow, /vars\.[A-Z]/);
   assert.doesNotMatch(workflow, /matrix\.(?:provider|credential)/);
   const reviewJob = workflow.slice(workflow.indexOf('  review:'), workflow.indexOf('  publish:'));
   assert.doesNotMatch(reviewJob, /issues: write/);
