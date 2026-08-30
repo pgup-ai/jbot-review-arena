@@ -14,8 +14,8 @@ arena PR. Target repositories are never modified.
 
 ## Repository configuration
 
-Set repository variable `JBOT_COMMIT_SHA` to a published 40-character J-Bot
-commit SHA. All repository-accessible secrets except Actions' built-in GitHub
+The workflow resolves the latest J-Bot image to an immutable digest for every
+comparison. All repository-accessible secrets except Actions' built-in GitHub
 token aliases reach the trusted image, so scope them narrowly and cap spend.
 Secret names must match the credential environment names accepted by the pinned
 J-Bot image.

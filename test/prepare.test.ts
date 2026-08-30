@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 
 import { prepareComparison } from '../src/prepare.ts';
-import { IMAGE_DIGEST, JBOT_SHA } from './helpers.ts';
+import { IMAGE_DIGEST } from './helpers.ts';
 
 it('freezes fork metadata, image identity, and requested model order', async () => {
   const manifest = await prepareComparison({
@@ -18,7 +18,6 @@ it('freezes fork metadata, image identity, and requested model order', async () 
     arenaRepository: 'pgup-ai/jbot-review-arena',
     workflowRunId: 123,
     runAttempt: 2,
-    jbotCommitSha: JBOT_SHA,
     imageRepository: 'ghcr.io/pgup-ai/jbot-review',
     imageDigest: IMAGE_DIGEST,
     resolvePull: async () => ({

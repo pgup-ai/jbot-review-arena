@@ -140,7 +140,6 @@ function resultFromJbot(
       provenance: {
         targetBaseSha: manifest.target.base.sha,
         targetHeadSha: manifest.target.head.sha,
-        jbotCommitSha: manifest.jbot.commitSha,
         imageRef: manifest.jbot.imageRef,
         imageDigest: manifest.jbot.imageDigest,
         backend: output.backend,
@@ -184,7 +183,6 @@ export function failedResult(
       provenance: {
         targetBaseSha: manifest.target.base.sha,
         targetHeadSha: manifest.target.head.sha,
-        jbotCommitSha: manifest.jbot.commitSha,
         imageRef: manifest.jbot.imageRef,
         imageDigest: manifest.jbot.imageDigest,
         backend: null,

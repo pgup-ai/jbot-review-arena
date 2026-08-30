@@ -72,7 +72,7 @@ export interface ComparisonManifestV1 {
     base: { repository: string; cloneUrl: string; ref: string; sha: string };
     head: { repository: string; cloneUrl: string; ref: string; sha: string };
   };
-  jbot: { commitSha: string; imageRef: string; imageDigest: string };
+  jbot: { imageRef: string; imageDigest: string };
   reviewConfig: ReviewConfigV1;
   models: ComparisonModelV1[];
 }
@@ -119,7 +119,6 @@ export interface ArenaResultV1 {
   provenance: {
     targetBaseSha: string;
     targetHeadSha: string;
-    jbotCommitSha: string;
     imageRef: string;
     imageDigest: string;
     backend: string | null;
@@ -276,9 +275,8 @@ export function validateManifest(input: unknown): ComparisonManifestV1 {
   });
   const baseSha = string(base.sha, 'comparison.target.base.sha');
   const headSha = string(head.sha, 'comparison.target.head.sha');
-  const commitSha = string(jbot.commitSha, 'comparison.jbot.commitSha');
   const imageDigest = string(jbot.imageDigest, 'comparison.jbot.imageDigest');
-  if (![baseSha, headSha, commitSha].every((sha) => SHA_PATTERN.test(sha)))
+  if (![baseSha, headSha].every((sha) => SHA_PATTERN.test(sha)))
     throw new Error('Comparison contains an invalid SHA.');
   if (!DIGEST_PATTERN.test(imageDigest)) throw new Error('comparison.jbot.imageDigest is invalid.');
   if (new Set(parsedModels.map(({ model }) => model)).size !== parsedModels.length)
@@ -316,7 +314,7 @@ export function validateManifest(input: unknown): ComparisonManifestV1 {
     throw new Error('Comparison head identity is inconsistent.');
   }
   const imageRef = string(jbot.imageRef, 'comparison.jbot.imageRef');
-  if (imageRef !== `${IMAGE_REPOSITORY}:${commitSha}`)
+  if (imageRef !== `${IMAGE_REPOSITORY}:latest`)
     throw new Error('comparison.jbot.imageRef is inconsistent.');
   return {
     schemaVersion: 1,
@@ -349,7 +347,6 @@ export function validateManifest(input: unknown): ComparisonManifestV1 {
       },
     },
     jbot: {
-      commitSha,
       imageRef,
       imageDigest,
     },
@@ -559,7 +556,6 @@ export function validateArenaResult(
     provenance: {
       targetBaseSha: string(provenance.targetBaseSha, 'provenance.targetBaseSha'),
       targetHeadSha: string(provenance.targetHeadSha, 'provenance.targetHeadSha'),
-      jbotCommitSha: string(provenance.jbotCommitSha, 'provenance.jbotCommitSha'),
       imageRef: string(provenance.imageRef, 'provenance.imageRef'),
       imageDigest: string(provenance.imageDigest, 'provenance.imageDigest'),
       backend: nullableString(provenance.backend, 'provenance.backend'),
@@ -589,7 +585,6 @@ export function validateArenaResult(
       result.provider !== model.provider ||
       result.provenance.targetBaseSha !== manifest.target.base.sha ||
       result.provenance.targetHeadSha !== manifest.target.head.sha ||
-      result.provenance.jbotCommitSha !== manifest.jbot.commitSha ||
       result.provenance.imageRef !== manifest.jbot.imageRef ||
       result.provenance.imageDigest !== manifest.jbot.imageDigest ||
       result.provenance.workflowRunId !== manifest.arena.workflowRunId ||
