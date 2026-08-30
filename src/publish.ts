@@ -251,7 +251,7 @@ export function loadResults(
 }
 
 function exactMarker(body: string): string | undefined {
-  const firstLine = body.split('\n', 1)[0] ?? '';
+  const firstLine = body.split(/\r?\n/, 1)[0] ?? '';
   return /^<!-- jbot-compare:comment=\d+:(?:summary|model=[0-9a-f]{64}:part=[1-9]\d*) -->$/.test(
     firstLine,
   )

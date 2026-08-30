@@ -103,7 +103,11 @@ it('reconciles paginated bot markers without touching user comments', async () =
     if (method === 'GET') {
       return new Response(
         JSON.stringify([
-          { id: 5, body: `${marker}\nold`, user: { login: 'github-actions[bot]', type: 'Bot' } },
+          {
+            id: 5,
+            body: `${marker}\r\nold`,
+            user: { login: 'github-actions[bot]', type: 'Bot' },
+          },
           {
             id: 6,
             body: `${marker}\nduplicate`,
