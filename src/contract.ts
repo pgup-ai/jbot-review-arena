@@ -1,13 +1,10 @@
 import { createHash } from 'node:crypto';
 
-import { arenaProvider } from './providers.ts';
-
 export type Severity = 'P0' | 'P1' | 'P2' | 'P3' | 'nit';
 export type ArenaResultStatus = 'completed' | 'skipped' | 'failed';
 export type ArenaFailureClass =
   | 'checkout'
   | 'image'
-  | 'credential'
   | 'timeout'
   | 'provider'
   | 'parse'
@@ -52,7 +49,6 @@ export interface ComparisonModelV1 {
   index: number;
   model: string;
   provider: string;
-  credentialAlias: string;
   artifactName: string;
 }
 
@@ -190,7 +186,6 @@ const IMAGE_REPOSITORY = 'ghcr.io/pgup-ai/jbot-review';
 const FAILURE_CLASSES = new Set<ArenaFailureClass>([
   'checkout',
   'image',
-  'credential',
   'timeout',
   'provider',
   'parse',
@@ -268,13 +263,11 @@ export function validateManifest(input: unknown): ComparisonManifestV1 {
       index: integer(model.index, `comparison.models[${index}].index`),
       model: modelName,
       provider: string(model.provider, `comparison.models[${index}].provider`),
-      credentialAlias: string(model.credentialAlias, `comparison.models[${index}].credentialAlias`),
       artifactName: string(model.artifactName, `comparison.models[${index}].artifactName`),
     };
     if (
       parsed.index !== index ||
       parsed.provider !== modelName.split('/')[0] ||
-      parsed.credentialAlias !== arenaProvider(parsed.provider)?.credentialAlias ||
       parsed.artifactName !== arenaArtifactName(index, modelName)
     ) {
       throw new Error(`comparison.models[${index}] is inconsistent.`);
@@ -632,6 +625,71 @@ export function sanitizeFailureMessage(error: unknown, secrets: string[] = []): 
 }
 
 export function redactSecrets(text: string, secrets: string[]): string {
-  for (const secret of secrets.filter(Boolean)) text = text.replaceAll(secret, '[REDACTED]');
+  for (const secret of [...new Set(secrets.filter(Boolean))].sort((a, b) => b.length - a.length)) {
+    text = text.replaceAll(secret, '[REDACTED]');
+  }
   return text;
+}
+
+export function expandSecretsForRedaction(secrets: string[]): string[] {
+  const expanded = new Set(secrets.filter(Boolean));
+  const isSensitiveKey = (key: string): boolean =>
+    /(^|_)(key|token|secret|password|credential|auth|authorization)$/.test(
+      key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(),
+    );
+  const collect = (value: unknown, sensitive = false): void => {
+    if (typeof value === 'string') {
+      if (sensitive && value.length >= 8) expanded.add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) collect(item, sensitive);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [key, item] of Object.entries(value)) {
+      collect(item, isSensitiveKey(key));
+    }
+  };
+  for (const secret of secrets) {
+    try {
+      collect(JSON.parse(secret));
+    } catch {
+      // Most provider credentials are opaque strings.
+    }
+  }
+  return [...expanded];
+}
+
+export function redactSecretsFromValue<T>(value: T, secrets: string[]): T {
+  if (typeof value === 'string') return redactSecrets(value, secrets) as T;
+  if (Array.isArray(value)) return value.map((item) => redactSecretsFromValue(item, secrets)) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        redactSecrets(key, secrets),
+        redactSecretsFromValue(item, secrets),
+      ]),
+    ) as T;
+  }
+  return value;
+}
+
+export function redactReviewSecrets(
+  review: ArenaResultV1['review'],
+  secrets: string[],
+): ArenaResultV1['review'] {
+  if (!review) return null;
+  return {
+    summary: redactSecrets(review.summary, secrets),
+    findings: review.findings.map((finding) => ({
+      ...finding,
+      path: redactSecrets(finding.path, secrets),
+      title: redactSecrets(finding.title, secrets),
+      body: redactSecrets(finding.body, secrets),
+      ...(finding.evidence === undefined
+        ? {}
+        : { evidence: redactSecrets(finding.evidence, secrets) }),
+    })),
+  };
 }

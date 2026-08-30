@@ -7,7 +7,7 @@ describe('/compare command', () => {
   it('accepts exact PR URLs and nested qualified models from the first line', () => {
     assert.deepEqual(
       parseCompareCommand(
-        '/compare https://github.com/acme/widget/pull/42 --models=openrouter/openai/gpt-oss:free,nvidia/moonshotai/kimi-k3\nignored',
+        '/compare https://github.com/acme/widget/pull/42 --models=cline/cline-free/longcat-2.0,nvidia/moonshotai/kimi-k3\nignored',
       ),
       {
         target: {
@@ -16,12 +16,12 @@ describe('/compare command', () => {
           repository: 'widget',
           prNumber: 42,
         },
-        models: ['openrouter/openai/gpt-oss:free', 'nvidia/moonshotai/kimi-k3'],
+        models: ['cline/cline-free/longcat-2.0', 'nvidia/moonshotai/kimi-k3'],
       },
     );
   });
 
-  it('rejects unsafe targets, flags, model syntax, duplicates, caps, and unknown providers', () => {
+  it('rejects unsafe targets, flags, model syntax, duplicates, and caps', () => {
     const invalid = [
       '/compare http://github.com/a/b/pull/1 --models=openrouter/a',
       '/compare https://evil.test/a/b/pull/1 --models=openrouter/a',
@@ -33,9 +33,13 @@ describe('/compare command', () => {
         .fill('openrouter/a')
         .map((model, index) => `${model}${index}`)
         .join(',')}`,
-      '/compare https://github.com/a/b/pull/1 --models=unknown/model',
     ];
     for (const command of invalid) assert.throws(() => parseCompareCommand(command));
+    assert.equal(
+      parseCompareCommand('/compare https://github.com/a/b/pull/1 --models=future-provider/model')
+        .models[0],
+      'future-provider/model',
+    );
   });
 
   it('requires a newly created PR comment from a trusted association', () => {

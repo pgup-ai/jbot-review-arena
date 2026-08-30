@@ -4,7 +4,7 @@ import { it } from 'node:test';
 import { prepareComparison } from '../src/prepare.ts';
 import { IMAGE_DIGEST, JBOT_SHA } from './helpers.ts';
 
-it('freezes fork metadata, image identity, provider aliases, and requested model order', async () => {
+it('freezes fork metadata, image identity, and requested model order', async () => {
   const manifest = await prepareComparison({
     event: {
       action: 'created',
@@ -52,24 +52,17 @@ it('freezes fork metadata, image identity, provider aliases, and requested model
   assert.equal(manifest.target.body, '');
   assert.equal(manifest.jbot.imageDigest, IMAGE_DIGEST);
   assert.deepEqual(
-    manifest.models.map(({ index, model, provider, credentialAlias }) => ({
-      index,
-      model,
-      provider,
-      credentialAlias,
-    })),
+    manifest.models.map(({ index, model, provider }) => ({ index, model, provider })),
     [
       {
         index: 0,
         model: 'nvidia/moonshotai/kimi-k3',
         provider: 'nvidia',
-        credentialAlias: 'NVIDIA_API_KEY',
       },
       {
         index: 1,
         model: 'openrouter/openai/gpt-oss:free',
         provider: 'openrouter',
-        credentialAlias: 'OPENROUTER_API_KEY',
       },
     ],
   );
