@@ -46,6 +46,11 @@ function utf8Chunks(text: string, maxBytes: number): string[] {
 
 export function safeMarkdown(text: string): string {
   return text
+    .replace(
+      /(^|\n)([ \t]{0,3})(`{3,}|~{3,})/g,
+      (_match, lineStart: string, indentation: string, fence: string) =>
+        `${lineStart}${indentation}${fence[0]}\u200b${fence.slice(1)}`,
+    )
     .replace(/@(?=[A-Za-z0-9_-])/g, '@\u200b')
     .replace(/(^|\W)#(?=\d)/g, '$1#\u200b')
     .replaceAll('<', '<\u200b')

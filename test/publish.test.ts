@@ -17,7 +17,7 @@ import { completedResult, fixtureManifest } from './helpers.ts';
 describe('safe publisher rendering', () => {
   it('preserves Markdown formatting while neutralizing active prose', () => {
     const input =
-      '**Bugs**\n- @team #123 <img src=x> ![remote](https://evil.test) [link](ftp://evil.test) [shortcut]\n[shortcut]: https://evil.test\nwww.evil.test';
+      '**Bugs**\n- @team #123 <img src=x> ![remote](https://evil.test) [link](ftp://evil.test) [shortcut]\n[shortcut]: https://evil.test\nwww.evil.test\n```ts\ncode\n~~~';
     const rendered = safeMarkdown(input);
     assert.match(rendered, /^\*\*Bugs\*\*\n- /);
     assert.equal(rendered.replaceAll('\u200b', ''), input);
@@ -26,6 +26,7 @@ describe('safe publisher rendering', () => {
     assert.ok(rendered.includes('!\u200b[remote]\u200b(https:\u200b//evil.test)'));
     assert.ok(rendered.includes('[shortcut]\u200b: https:\u200b//evil.test'));
     assert.ok(rendered.includes('w\u200bww.evil.test'));
+    assert.ok(rendered.includes('`\u200b``ts\ncode\n~\u200b~~'));
   });
 
   it('renders deterministic summary order and splits oversized reports within the byte budget', () => {
@@ -62,12 +63,14 @@ describe('safe publisher rendering', () => {
     assert.doesNotMatch(rendered, /Finding 1|title|details|part 1\/1|```/);
     second.review!.summary = '';
     assert.match(renderModelReportParts(manifest, second)[0]!, /No findings reported\./);
+    second.review!.summary = '```ts\nunclosed';
     const combined = renderComparisonComments(manifest, [second], false);
     assert.equal(combined.length, 1);
     assert.match(
       combined[0]!,
       /<details>[\s\S]*<summary><code>nvidia\/moonshotai\/kimi-k3<\/code>/,
     );
+    assert.doesNotMatch(combined[0]!, /\n```ts/);
     assert.doesNotMatch(combined[0]!, /:model=/);
     assert.ok(renderComparisonComments(manifest, [first, second], false).length > 1);
   });
