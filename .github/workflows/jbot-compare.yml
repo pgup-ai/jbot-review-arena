@@ -90,6 +90,7 @@ jobs:
           ARTIFACT_DIRECTORY: ${{ runner.temp }}/artifact
           MODEL_INDEX: ${{ matrix.index }}
           JBOT_AUTH_JSON: ${{ toJSON(secrets) }}
+          JBOT_VARS_JSON: ${{ toJSON(vars) }}
         run: node dist/worker.js
       - name: Upload model result
         if: always()
