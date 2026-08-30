@@ -16,8 +16,8 @@ jobs:
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
     env:
-      JBOT_COMMIT_SHA: ${{ vars.JBOT_COMMIT_SHA }}
       JBOT_IMAGE_REPOSITORY: ghcr.io/pgup-ai/jbot-review
+      JBOT_IMAGE_TAG: arena-v1
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -37,17 +37,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$JBOT_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
-          image="$JBOT_IMAGE_REPOSITORY:$JBOT_COMMIT_SHA"
+          image="$JBOT_IMAGE_REPOSITORY:$JBOT_IMAGE_TAG"
           docker pull --quiet "$image"
+          commit_sha="$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+          [[ "$commit_sha" =~ ^[0-9a-f]{40}$ ]]
           pinned="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           digest="${pinned##*@}"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: Freeze comparison
         id: prepare
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          JBOT_COMMIT_SHA: ${{ steps.image.outputs.commit_sha }}
           JBOT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           COMPARISON_OUTPUT: ${{ runner.temp }}/comparison.json
         run: node dist/prepare.js

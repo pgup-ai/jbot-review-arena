@@ -14,11 +14,11 @@ arena PR. Target repositories are never modified.
 
 ## Repository configuration
 
-Set repository variable `JBOT_COMMIT_SHA` to a published 40-character J-Bot
-commit SHA. All repository-accessible secrets except Actions' built-in GitHub
-token aliases reach the trusted image, so scope them narrowly and cap spend.
-Secret names must match the credential environment names accepted by the pinned
-J-Bot image.
+The workflow resolves the J-Bot `arena-v1` compatibility tag to an immutable
+digest and records the image's source commit in every comparison. All
+repository-accessible secrets except Actions' built-in GitHub token aliases
+reach the trusted image, so scope them narrowly and cap spend. Secret names
+must match the credential environment names accepted by the pinned J-Bot image.
 
 The long-lived arena PR is intentionally content-free; each new `/compare`
 comment creates a new immutable sample.
