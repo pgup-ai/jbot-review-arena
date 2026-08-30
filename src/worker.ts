@@ -29,30 +29,38 @@ class WorkerFailure extends Error {
   }
 }
 
-const SECRETS_ENV = 'JBOT_AUTH_JSON';
+const CONTAINER_AUTH_ENV = 'JBOT_AUTH_JSON';
+const AUTH_BUNDLES = ['JBOT_VARS_JSON', CONTAINER_AUTH_ENV] as const;
 const GITHUB_TOKEN_NAMES = new Set(['GITHUB_TOKEN', 'GH_TOKEN']);
 
 export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
-  const raw = env[SECRETS_ENV]?.trim();
-  if (!raw) return {};
-  let secrets: unknown;
-  try {
-    secrets = JSON.parse(raw);
-  } catch {
-    throw new Error(`${SECRETS_ENV} must be valid JSON.`);
+  const auth: Record<string, string> = {};
+  for (const name of AUTH_BUNDLES) {
+    const raw = env[name]?.trim();
+    if (!raw) continue;
+    let bundle: unknown;
+    try {
+      bundle = JSON.parse(raw);
+    } catch {
+      throw new Error(`${name} must be valid JSON.`);
+    }
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+      throw new Error(`${name} must be a JSON object.`);
+    }
+    Object.assign(
+      auth,
+      Object.fromEntries(
+        Object.entries(bundle).filter(
+          (entry): entry is [string, string] =>
+            typeof entry[1] === 'string' &&
+            Boolean(entry[1]) &&
+            /^[A-Z_][A-Z0-9_]*$/.test(entry[0]) &&
+            !GITHUB_TOKEN_NAMES.has(entry[0]),
+        ),
+      ),
+    );
   }
-  if (!secrets || typeof secrets !== 'object' || Array.isArray(secrets)) {
-    throw new Error(`${SECRETS_ENV} must be a JSON object.`);
-  }
-  return Object.fromEntries(
-    Object.entries(secrets).filter(
-      (entry): entry is [string, string] =>
-        typeof entry[1] === 'string' &&
-        Boolean(entry[1]) &&
-        /^[A-Z_][A-Z0-9_]*$/.test(entry[0]) &&
-        !GITHUB_TOKEN_NAMES.has(entry[0]),
-    ),
-  );
+  return auth;
 }
 
 function run(command: string, args: string[], cwd?: string): string {
@@ -121,7 +129,7 @@ export function dockerRunArgs(
     '--env',
     'MODEL',
     '--env',
-    SECRETS_ENV,
+    CONTAINER_AUTH_ENV,
     '--entrypoint',
     'node',
     `${manifest.jbot.imageRef.split(':').slice(0, -1).join(':')}@${manifest.jbot.imageDigest}`,
@@ -255,7 +263,7 @@ export function runArenaWorker(params: {
     pullAndVerifyImage(params.manifest);
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      [SECRETS_ENV]: JSON.stringify(params.authEnvironment),
+      [CONTAINER_AUTH_ENV]: JSON.stringify(params.authEnvironment),
       MODEL: params.model.model,
     };
     const timeout = (params.manifest.reviewConfig.timeBudgetMinutes + 5) * 60_000;

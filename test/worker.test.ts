@@ -22,6 +22,10 @@ describe('arena worker boundary', () => {
   it('builds a pinned container invocation with J-Bot auth isolated from runner tokens', () => {
     const manifest = fixtureManifest(['cline/cline-free/model']);
     const auth = readJbotAuthEnvironment({
+      JBOT_VARS_JSON: JSON.stringify({
+        JBOT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.example/v1',
+        CLINE_AUTH_JSON: 'variable-value',
+      }),
       JBOT_AUTH_JSON: JSON.stringify({
         CLINE_AUTH_JSON: 'secret-value',
         FUTURE_PROVIDER_TOKEN: 'future-secret',
@@ -33,6 +37,7 @@ describe('arena worker boundary', () => {
       }),
     });
     assert.deepEqual(auth, {
+      JBOT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.example/v1',
       CLINE_AUTH_JSON: 'secret-value',
       FUTURE_PROVIDER_TOKEN: 'future-secret',
       _INTERNAL_TOKEN: 'internal-secret',
@@ -51,6 +56,7 @@ describe('arena worker boundary', () => {
     );
     assert.ok(args.includes(`ghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`));
     assert.throws(() => readJbotAuthEnvironment({ JBOT_AUTH_JSON: '[]' }), /must be a JSON object/);
+    assert.throws(() => readJbotAuthEnvironment({ JBOT_VARS_JSON: '[]' }), /must be a JSON object/);
   });
 
   it('materializes exact fork head/base commits and their frozen diff', () => {
