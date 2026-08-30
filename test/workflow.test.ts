@@ -18,5 +18,6 @@ it('keeps workflow fan-out, failure publication, artifacts, and permissions expl
   const reviewJob = workflow.slice(workflow.indexOf('  review:'), workflow.indexOf('  publish:'));
   assert.doesNotMatch(reviewJob, /issues: write/);
   const publishJob = workflow.slice(workflow.indexOf('  publish:'));
+  assert.match(publishJob, /pull-requests: write/);
   assert.doesNotMatch(publishJob, /JBOT_AUTH_JSON/);
 });
