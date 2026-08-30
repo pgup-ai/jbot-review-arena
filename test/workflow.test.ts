@@ -12,7 +12,7 @@ it('keeps workflow fan-out, failure publication, artifacts, and permissions expl
   assert.match(workflow, /matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.matrix\) \}\}/);
   assert.match(workflow, /publish:\n\s+if: always\(\) && needs\.prepare\.result == 'success'/);
   assert.match(workflow, /name: \$\{\{ matrix\.artifactName \}\}/);
-  assert.match(workflow, /JBOT_IMAGE_TAG: arena-v1/);
+  assert.match(workflow, /image="\$JBOT_IMAGE_REPOSITORY:latest"/);
   assert.match(workflow, /org\.opencontainers\.image\.revision/);
   assert.match(workflow, /JBOT_COMMIT_SHA: \$\{\{ steps\.image\.outputs\.commit_sha \}\}/);
   assert.doesNotMatch(workflow, /vars\.JBOT_COMMIT_SHA/);
