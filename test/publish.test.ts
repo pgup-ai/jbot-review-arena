@@ -5,21 +5,28 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
 import {
-  inertFence,
   loadResults,
   reconcileComments,
+  renderComparisonComments,
   renderModelReportParts,
   renderSummary,
+  safeMarkdown,
 } from '../src/publish.ts';
 import { completedResult, fixtureManifest } from './helpers.ts';
 
 describe('safe publisher rendering', () => {
-  it('uses a longer adaptive fence and preserves adversarial prose inertly', () => {
-    const text = '@team #123 [link](https://evil.test) <img src=x> ``` nested ````';
-    const rendered = inertFence(text);
-    assert.match(rendered, /^`````\n/);
-    assert.ok(rendered.includes(text));
-    assert.match(rendered, /\n`````$/);
+  it('preserves Markdown formatting while neutralizing active prose', () => {
+    const input =
+      '**Bugs**\n- @team #123 <img src=x> ![remote](https://evil.test) [link](ftp://evil.test) [shortcut]\n[shortcut]: https://evil.test\nwww.evil.test\n```ts\ncode\n~~~';
+    const rendered = safeMarkdown(input);
+    assert.match(rendered, /^\*\*Bugs\*\*\n- /);
+    assert.equal(rendered.replaceAll('\u200b', ''), input);
+    assert.ok(rendered.includes('@\u200bteam #\u200b123'));
+    assert.ok(rendered.includes('<\u200bimg src=x>'));
+    assert.ok(rendered.includes('!\u200b[remote]\u200b(https:\u200b//evil.test)'));
+    assert.ok(rendered.includes('[shortcut]\u200b: https:\u200b//evil.test'));
+    assert.ok(rendered.includes('w\u200bww.evil.test'));
+    assert.ok(rendered.includes('`\u200b``ts\ncode\n~\u200b~~'));
   });
 
   it('renders deterministic summary order and splits oversized reports within the byte budget', () => {
@@ -29,13 +36,14 @@ describe('safe publisher rendering', () => {
     ]);
     const first = completedResult(manifest, 0);
     const second = completedResult(manifest, 1);
-    first.review!.summary = '@team ' + '😀'.repeat(40_000);
+    first.review!.summary = '**Summary** @team ' + '😀'.repeat(40_000);
     first.review!.findings.push({
-      path: 'src/a file.ts',
+      path: 'src/a `file`.ts',
       line: 7,
       severity: 'P1',
-      title: '#123 <script>',
+      title: '#123 <script> ' + 't'.repeat(80_000),
       body: '[remote](https://evil.test) ' + 'x'.repeat(80_000),
+      evidence: 'x\n'.repeat(30_000),
     });
     const summary = renderSummary(manifest, [first, second], true);
     assert.ok(summary.indexOf(first.model) < summary.indexOf(second.model));
@@ -47,9 +55,24 @@ describe('safe publisher rendering', () => {
       assert.match(part.split('\n')[0]!, new RegExp(`:part=${index + 1} -->$`));
     });
     const rendered = parts.join('\n');
-    assert.match(rendered, /Open frozen target location/);
-    assert.match(rendered, /\/src\/a%20file\.ts#L7/);
-    assert.ok(rendered.includes('[remote](https://evil.test)'));
+    assert.match(rendered, /### 1\. P1 · #\u200b123 <\u200bscript>/);
+    assert.match(rendered, /t…\n/);
+    assert.match(rendered, /\[`` src\/a `file`\.ts:7 ``\]\([^\n]+\/src\/a%20%60file%60\.ts#L7\)/);
+    assert.ok(rendered.replaceAll('\u200b', '').includes('[remote](https://evil.test)'));
+    assert.doesNotMatch(rendered, /\[remote\]\(https:\/\/evil\.test\)/);
+    assert.doesNotMatch(rendered, /Finding 1|title|details|part 1\/1|```/);
+    second.review!.summary = '';
+    assert.match(renderModelReportParts(manifest, second)[0]!, /No findings reported\./);
+    second.review!.summary = '```ts\nunclosed';
+    const combined = renderComparisonComments(manifest, [second], false);
+    assert.equal(combined.length, 1);
+    assert.match(
+      combined[0]!,
+      /<details>[\s\S]*<summary><code>nvidia\/moonshotai\/kimi-k3<\/code>/,
+    );
+    assert.doesNotMatch(combined[0]!, /\n```ts/);
+    assert.doesNotMatch(combined[0]!, /:model=/);
+    assert.ok(renderComparisonComments(manifest, [first, second], false).length > 1);
   });
 
   it('synthesizes missing and invalid artifacts in requested model order', () => {
@@ -83,7 +106,11 @@ it('reconciles paginated bot markers without touching user comments', async () =
     if (method === 'GET') {
       return new Response(
         JSON.stringify([
-          { id: 5, body: `${marker}\nold`, user: { login: 'github-actions[bot]', type: 'Bot' } },
+          {
+            id: 5,
+            body: `${marker}\r\nold`,
+            user: { login: 'github-actions[bot]', type: 'Bot' },
+          },
           {
             id: 6,
             body: `${marker}\nduplicate`,
