@@ -30,37 +30,41 @@ class WorkerFailure extends Error {
 }
 
 const CONTAINER_AUTH_ENV = 'JBOT_AUTH_JSON';
-const AUTH_BUNDLES = ['JBOT_VARS_JSON', CONTAINER_AUTH_ENV] as const;
+const VARS_ENV = 'JBOT_VARS_JSON';
 const GITHUB_TOKEN_NAMES = new Set(['GITHUB_TOKEN', 'GH_TOKEN']);
 
-export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
-  const auth: Record<string, string> = {};
-  for (const name of AUTH_BUNDLES) {
-    const raw = env[name]?.trim();
-    if (!raw) continue;
-    let bundle: unknown;
-    try {
-      bundle = JSON.parse(raw);
-    } catch {
-      throw new Error(`${name} must be valid JSON.`);
-    }
-    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
-      throw new Error(`${name} must be a JSON object.`);
-    }
-    Object.assign(
-      auth,
-      Object.fromEntries(
-        Object.entries(bundle).filter(
-          (entry): entry is [string, string] =>
-            typeof entry[1] === 'string' &&
-            Boolean(entry[1]) &&
-            /^[A-Z_][A-Z0-9_]*$/.test(entry[0]) &&
-            !GITHUB_TOKEN_NAMES.has(entry[0]),
-        ),
-      ),
-    );
+function readAuthBundle(raw: string | undefined, name: string): Record<string, string> {
+  if (!raw?.trim()) return {};
+  let bundle: unknown;
+  try {
+    bundle = JSON.parse(raw);
+  } catch {
+    throw new Error(`${name} must be valid JSON.`);
   }
-  return auth;
+  if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+    throw new Error(`${name} must be a JSON object.`);
+  }
+  return Object.fromEntries(
+    Object.entries(bundle).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' &&
+        Boolean(entry[1]) &&
+        /^[A-Z_][A-Z0-9_]*$/.test(entry[0]) &&
+        !GITHUB_TOKEN_NAMES.has(entry[0]),
+    ),
+  );
+}
+
+export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): {
+  authEnvironment: Record<string, string>;
+  secretValues: string[];
+} {
+  const variables = readAuthBundle(env[VARS_ENV], VARS_ENV);
+  const secrets = readAuthBundle(env[CONTAINER_AUTH_ENV], CONTAINER_AUTH_ENV);
+  return {
+    authEnvironment: { ...variables, ...secrets },
+    secretValues: Object.values(secrets),
+  };
 }
 
 function run(command: string, args: string[], cwd?: string): string {
@@ -252,12 +256,13 @@ export function runArenaWorker(params: {
   manifestPath: string;
   workRoot: string;
   authEnvironment: Record<string, string>;
+  secretValues: string[];
 }): ArenaResultV1 {
   const startedAt = performance.now();
   const workspace = resolve(params.workRoot, 'workspace');
   const outputDirectory = resolve(params.workRoot, 'output');
   mkdirSync(outputDirectory, { recursive: true });
-  const secrets = Object.values(params.authEnvironment);
+  const secrets = params.secretValues;
   try {
     materializeTarget(params.manifest, workspace);
     pullAndVerifyImage(params.manifest);
@@ -344,7 +349,7 @@ function main(): void {
   const modelIndex = Number(process.env.MODEL_INDEX);
   const model = manifest.models[modelIndex];
   if (!model) throw new Error('MODEL_INDEX is not present in the comparison manifest.');
-  const authEnvironment = readJbotAuthEnvironment(process.env);
+  const { authEnvironment, secretValues } = readJbotAuthEnvironment(process.env);
   mkdirSync(artifactDirectory, { recursive: true });
   const result = runArenaWorker({
     manifest,
@@ -352,6 +357,7 @@ function main(): void {
     manifestPath,
     workRoot,
     authEnvironment,
+    secretValues,
   });
   writeFileSync(join(artifactDirectory, 'result.json'), `${JSON.stringify(result)}\n`, {
     flag: 'wx',
@@ -362,7 +368,7 @@ function main(): void {
     const telemetry = readFileSync(telemetryPath, 'utf8');
     writeFileSync(
       join(artifactDirectory, 'telemetry.jsonl'),
-      redactSecrets(telemetry, expandSecretsForRedaction(Object.values(authEnvironment))),
+      redactSecrets(telemetry, expandSecretsForRedaction(secretValues)),
     );
   } catch {
     // Telemetry is unavailable for setup failures and some opaque backends.

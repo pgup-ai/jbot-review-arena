@@ -21,7 +21,7 @@ function git(cwd: string, args: string[]): string {
 describe('arena worker boundary', () => {
   it('builds a pinned container invocation with J-Bot auth isolated from runner tokens', () => {
     const manifest = fixtureManifest(['cline/cline-free/model']);
-    const auth = readJbotAuthEnvironment({
+    const { authEnvironment: auth, secretValues } = readJbotAuthEnvironment({
       JBOT_VARS_JSON: JSON.stringify({
         JBOT_OPENAI_COMPATIBLE_BASE_URL: 'https://api.example/v1',
         CLINE_AUTH_JSON: 'variable-value',
@@ -42,6 +42,7 @@ describe('arena worker boundary', () => {
       FUTURE_PROVIDER_TOKEN: 'future-secret',
       _INTERNAL_TOKEN: 'internal-secret',
     });
+    assert.deepEqual(secretValues, ['secret-value', 'future-secret', 'internal-secret']);
     const args = dockerRunArgs(manifest, '/target', '/control/comparison.json', '/out');
     assert.ok(args.includes('type=bind,src=/target,dst=/workspace,readonly'));
     assert.ok(
@@ -56,7 +57,10 @@ describe('arena worker boundary', () => {
     );
     assert.ok(args.includes(`ghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`));
     assert.throws(() => readJbotAuthEnvironment({ JBOT_AUTH_JSON: '[]' }), /must be a JSON object/);
-    assert.throws(() => readJbotAuthEnvironment({ JBOT_VARS_JSON: '[]' }), /must be a JSON object/);
+    assert.throws(
+      () => readJbotAuthEnvironment({ JBOT_VARS_JSON: '{' }),
+      /JBOT_VARS_JSON must be valid JSON/,
+    );
   });
 
   it('materializes exact fork head/base commits and their frozen diff', () => {
@@ -118,17 +122,22 @@ describe('arena worker boundary', () => {
 
   it('emits a scrubbed failure envelope without inventing usage or resolved backend data', () => {
     const manifest = fixtureManifest();
+    const { secretValues } = readJbotAuthEnvironment({
+      JBOT_VARS_JSON: JSON.stringify({ ENABLED: 'true' }),
+      JBOT_AUTH_JSON: JSON.stringify({ TOKEN: 'secret-value' }),
+    });
     const result = failedResult(
       manifest,
       manifest.models[0]!,
       'runner-exit',
-      'token=secret-value',
+      'enabled=true token=secret-value',
       12,
-      ['secret-value'],
+      secretValues,
     );
     assert.equal(result.status, 'failed');
     assert.equal(result.failure?.class, 'runner-exit');
     assert.doesNotMatch(result.failure!.message, /secret-value/);
+    assert.match(result.failure!.message, /enabled=true/);
     assert.equal(result.usage.sessions, 0);
     assert.equal(result.provenance.backend, null);
   });
