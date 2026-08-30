@@ -3,8 +3,10 @@ import { describe, it } from 'node:test';
 
 import {
   arenaArtifactName,
+  expandSecretsForRedaction,
   parseJbotOutput,
   parseManifest,
+  redactReviewSecrets,
   redactSecretsFromValue,
   sanitizeFailureMessage,
   validateArenaResult,
@@ -83,8 +85,36 @@ describe('versioned contracts', () => {
     );
     assert.doesNotMatch(sanitized, /bearer-value|json-value|user:pass|[\r\n]/);
     assert.ok(Buffer.byteLength(sanitized) <= 512);
+  });
+
+  it('redacts nested structured credentials without mutating review enums', () => {
     assert.deepEqual(redactSecretsFromValue({ token: ['prefix-secret', 1] }, ['secret']), {
       token: ['prefix-[REDACTED]', 1],
     });
+    const secrets = expandSecretsForRedaction([
+      '{"access_token":"nested-secret","metadata":"provider"}',
+      'security',
+    ]);
+    assert.ok(secrets.includes('nested-secret'));
+    assert.ok(!secrets.includes('provider'));
+    const review = redactReviewSecrets(
+      {
+        summary: 'nested-secret',
+        findings: [
+          {
+            path: 'src/file.ts',
+            line: 1,
+            severity: 'P1',
+            kind: 'security',
+            title: 'nested-secret',
+            body: 'body',
+          },
+        ],
+      },
+      secrets,
+    )!;
+    assert.equal(review.summary, '[REDACTED]');
+    assert.equal(review.findings[0]!.title, '[REDACTED]');
+    assert.equal(review.findings[0]!.kind, 'security');
   });
 });

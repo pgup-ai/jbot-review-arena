@@ -5,10 +5,12 @@ import { performance } from 'node:perf_hooks';
 
 import {
   emptyUsage,
+  expandSecretsForRedaction,
   parseJbotOutput,
   parseManifest,
   redactSecrets,
   redactSecretsFromValue,
+  redactReviewSecrets,
   sanitizeFailureMessage,
   validateArenaResult,
   type ArenaFailureClass,
@@ -114,7 +116,7 @@ function resultFromJbot(
   workerMs: number,
   secrets: string[],
 ): ArenaResultV1 {
-  const redactedOutput = redactSecretsFromValue(output, secrets);
+  const redactionSecrets = expandSecretsForRedaction(secrets);
   return validateArenaResult(
     {
       schemaVersion: 1,
@@ -122,27 +124,27 @@ function resultFromJbot(
       modelIndex: model.index,
       model: model.model,
       provider: model.provider,
-      status: redactedOutput.status,
+      status: output.status,
       provenance: {
         targetBaseSha: manifest.target.base.sha,
         targetHeadSha: manifest.target.head.sha,
         jbotCommitSha: manifest.jbot.commitSha,
         imageRef: manifest.jbot.imageRef,
         imageDigest: manifest.jbot.imageDigest,
-        backend: redactedOutput.backend,
-        sdkEngine: redactedOutput.sdkEngine,
+        backend: output.backend,
+        sdkEngine: output.sdkEngine,
         workflowRunId: manifest.arena.workflowRunId,
         runAttempt: manifest.arena.runAttempt,
         reviewConfig: manifest.reviewConfig,
-        resolvedModelOptions: redactedOutput.resolvedModelOptions,
+        resolvedModelOptions: redactSecretsFromValue(output.resolvedModelOptions, redactionSecrets),
       },
-      timing: { reviewMs: redactedOutput.reviewMs, workerMs },
-      usage: redactedOutput.usage,
-      review: redactedOutput.review,
-      failure: redactedOutput.failure
+      timing: { reviewMs: output.reviewMs, workerMs },
+      usage: output.usage,
+      review: redactReviewSecrets(output.review, redactionSecrets),
+      failure: output.failure
         ? {
-            class: redactedOutput.failure.class,
-            message: sanitizeFailureMessage(redactedOutput.failure.message, secrets),
+            class: output.failure.class,
+            message: sanitizeFailureMessage(output.failure.message, redactionSecrets),
           }
         : null,
     },
@@ -158,6 +160,7 @@ export function failedResult(
   workerMs: number,
   secrets: string[] = [],
 ): ArenaResultV1 {
+  const redactionSecrets = expandSecretsForRedaction(secrets);
   return validateArenaResult(
     {
       schemaVersion: 1,
@@ -182,7 +185,10 @@ export function failedResult(
       timing: { reviewMs: null, workerMs },
       usage: emptyUsage(),
       review: null,
-      failure: { class: failureClass, message: sanitizeFailureMessage(error, secrets) },
+      failure: {
+        class: failureClass,
+        message: sanitizeFailureMessage(error, redactionSecrets),
+      },
     },
     manifest,
   );
@@ -332,7 +338,7 @@ function main(): void {
     const telemetry = readFileSync(telemetryPath, 'utf8');
     writeFileSync(
       join(artifactDirectory, 'telemetry.jsonl'),
-      redactSecrets(telemetry, Object.values(authEnvironment)),
+      redactSecrets(telemetry, expandSecretsForRedaction(Object.values(authEnvironment))),
     );
   } catch {
     // Telemetry is unavailable for setup failures and some opaque backends.
