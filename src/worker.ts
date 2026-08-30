@@ -206,16 +206,19 @@ export function failedResult(
   );
 }
 
-function pullAndVerifyImage(manifest: ComparisonManifestV1): void {
+export function pullAndVerifyImage(
+  manifest: ComparisonManifestV1,
+  runCommand: typeof run = run,
+): void {
   const pinned = `${manifest.jbot.imageRef.split(':').slice(0, -1).join(':')}@${manifest.jbot.imageDigest}`;
   try {
-    run('docker', ['pull', '--quiet', pinned]);
-    const digests = run('docker', [
+    runCommand('docker', ['pull', '--quiet', pinned]);
+    const digests = runCommand('docker', [
       'image',
       'inspect',
       pinned,
       '--format',
-      '{{join .RepoDigests "\n"}}',
+      '{{range .RepoDigests}}{{println .}}{{end}}',
     ]);
     if (!digests.split('\n').some((item) => item.endsWith(`@${manifest.jbot.imageDigest}`))) {
       throw new Error('Pulled image does not expose the frozen registry digest.');
