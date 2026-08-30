@@ -27,7 +27,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Authenticate to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -51,7 +51,7 @@ jobs:
           JBOT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           COMPARISON_OUTPUT: ${{ runner.temp }}/comparison.json
         run: node dist/prepare.js
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: comparison-manifest
           path: ${{ runner.temp }}/comparison.json
@@ -76,12 +76,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: comparison-manifest
           path: ${{ runner.temp }}/control
       - name: Authenticate to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -95,7 +95,7 @@ jobs:
         run: node dist/worker.js
       - name: Upload model result
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifactName }}
           path: ${{ runner.temp }}/artifact
@@ -109,6 +109,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -117,11 +118,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           name: comparison-manifest
           path: ${{ runner.temp }}/control
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v7
         with:
           pattern: model-*
           path: ${{ runner.temp }}/results

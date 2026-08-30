@@ -9,6 +9,7 @@ import {
   dockerRunArgs,
   failedResult,
   materializeTarget,
+  pullAndVerifyImage,
   readJbotAuthEnvironment,
 } from '../src/worker.ts';
 import { fixtureManifest } from './helpers.ts';
@@ -86,6 +87,18 @@ describe('arena worker boundary', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it('verifies the pinned digest with a Docker-safe multi-digest format', () => {
+    const manifest = fixtureManifest();
+    const calls: string[][] = [];
+    pullAndVerifyImage(manifest, (_command, args) => {
+      calls.push(args);
+      return args[0] === 'pull'
+        ? ''
+        : `ghcr.io/example/other@sha256:${'0'.repeat(64)}\nghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`;
+    });
+    assert.equal(calls[1]?.at(-1), '{{range .RepoDigests}}{{println .}}{{end}}');
   });
 
   it('emits a scrubbed failure envelope without inventing usage or resolved backend data', () => {
