@@ -12,14 +12,10 @@ it('keeps workflow fan-out, failure publication, artifacts, and permissions expl
   assert.match(workflow, /matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.matrix\) \}\}/);
   assert.match(workflow, /publish:\n\s+if: always\(\) && needs\.prepare\.result == 'success'/);
   assert.match(workflow, /name: \$\{\{ matrix\.artifactName \}\}/);
-  assert.match(workflow, /MODEL_CREDENTIAL: \$\{\{ secrets\[matrix\.credentialAlias\] \}\}/);
-  assert.match(
-    workflow,
-    /MODEL_FALLBACK_CREDENTIAL: \$\{\{ secrets\[matrix\.fallbackCredentialAlias\] \}\}/,
-  );
-  assert.match(workflow, /MODEL_BASE_URL: \$\{\{ vars\[matrix\.baseUrlAlias\] \}\}/);
+  assert.match(workflow, /JBOT_AUTH_CLINE_AUTH_JSON: \$\{\{ secrets\.CLINE_AUTH_JSON \}\}/);
+  assert.doesNotMatch(workflow, /matrix\.(?:provider|credential)/);
   const reviewJob = workflow.slice(workflow.indexOf('  review:'), workflow.indexOf('  publish:'));
   assert.doesNotMatch(reviewJob, /issues: write/);
   const publishJob = workflow.slice(workflow.indexOf('  publish:'));
-  assert.doesNotMatch(publishJob, /MODEL_CREDENTIAL|MODEL_BASE_URL/);
+  assert.doesNotMatch(publishJob, /JBOT_AUTH_/);
 });

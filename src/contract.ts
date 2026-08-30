@@ -5,7 +5,6 @@ export type ArenaResultStatus = 'completed' | 'skipped' | 'failed';
 export type ArenaFailureClass =
   | 'checkout'
   | 'image'
-  | 'credential'
   | 'timeout'
   | 'provider'
   | 'parse'
@@ -50,9 +49,6 @@ export interface ComparisonModelV1 {
   index: number;
   model: string;
   provider: string;
-  credentialAlias: string;
-  fallbackCredentialAlias: string;
-  baseUrlAlias: string;
   artifactName: string;
 }
 
@@ -186,12 +182,10 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 const DIGEST_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}\/[A-Za-z0-9._:-]+(?:\/[A-Za-z0-9._:-]+)*$/;
-const ALIAS_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,127}$/;
 const IMAGE_REPOSITORY = 'ghcr.io/pgup-ai/jbot-review';
 const FAILURE_CLASSES = new Set<ArenaFailureClass>([
   'checkout',
   'image',
-  'credential',
   'timeout',
   'provider',
   'parse',
@@ -222,13 +216,6 @@ function boundedText(value: unknown, label: string, maxBytes: number): string {
   const parsed = text(value, label);
   if (Buffer.byteLength(parsed) > maxBytes) throw new Error(`${label} is too large.`);
   return parsed;
-}
-
-function alias(value: unknown, label: string, optional = false): string {
-  if (optional && value === '') return '';
-  if (typeof value !== 'string' || !ALIAS_PATTERN.test(value))
-    throw new Error(`${label} is invalid.`);
-  return value;
 }
 
 function integer(value: unknown, label: string, minimum = 0): number {
@@ -276,19 +263,11 @@ export function validateManifest(input: unknown): ComparisonManifestV1 {
       index: integer(model.index, `comparison.models[${index}].index`),
       model: modelName,
       provider: string(model.provider, `comparison.models[${index}].provider`),
-      credentialAlias: alias(model.credentialAlias, `comparison.models[${index}].credentialAlias`),
-      fallbackCredentialAlias: alias(
-        model.fallbackCredentialAlias,
-        `comparison.models[${index}].fallbackCredentialAlias`,
-        true,
-      ),
-      baseUrlAlias: alias(model.baseUrlAlias, `comparison.models[${index}].baseUrlAlias`, true),
       artifactName: string(model.artifactName, `comparison.models[${index}].artifactName`),
     };
     if (
       parsed.index !== index ||
       parsed.provider !== modelName.split('/')[0] ||
-      parsed.fallbackCredentialAlias === parsed.credentialAlias ||
       parsed.artifactName !== arenaArtifactName(index, modelName)
     ) {
       throw new Error(`comparison.models[${index}] is inconsistent.`);

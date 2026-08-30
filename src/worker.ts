@@ -26,6 +26,17 @@ class WorkerFailure extends Error {
   }
 }
 
+const AUTH_ENV_PREFIX = 'JBOT_AUTH_';
+
+export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(env).flatMap(([name, value]) => {
+      const target = name.startsWith(AUTH_ENV_PREFIX) ? name.slice(AUTH_ENV_PREFIX.length) : '';
+      return value && /^[A-Z][A-Z0-9_]*$/.test(target) ? [[target, value]] : [];
+    }),
+  );
+}
+
 function run(command: string, args: string[], cwd?: string): string {
   return execFileSync(command, args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
 }
@@ -62,10 +73,10 @@ export function materializeTarget(manifest: ComparisonManifestV1, workspace: str
 
 export function dockerRunArgs(
   manifest: ComparisonManifestV1,
-  model: ComparisonModelV1,
   workspace: string,
   manifestPath: string,
   outputDirectory: string,
+  authNames: string[],
 ): string[] {
   const args = [
     'run',
@@ -81,13 +92,7 @@ export function dockerRunArgs(
     '--env',
     'MODEL',
   ];
-  for (const name of [
-    model.credentialAlias,
-    model.fallbackCredentialAlias,
-    model.baseUrlAlias,
-  ].filter(Boolean)) {
-    args.push('--env', name);
-  }
+  for (const name of authNames) args.push('--env', name);
   return [
     ...args,
     '--entrypoint',
@@ -205,56 +210,33 @@ export function runArenaWorker(params: {
   model: ComparisonModelV1;
   manifestPath: string;
   workRoot: string;
-  credential: string;
-  fallbackCredential: string;
-  baseUrl: string;
+  authEnvironment: Record<string, string>;
 }): ArenaResultV1 {
   const startedAt = performance.now();
   const workspace = resolve(params.workRoot, 'workspace');
   const outputDirectory = resolve(params.workRoot, 'output');
   mkdirSync(outputDirectory, { recursive: true });
-  const secrets = [params.credential, params.fallbackCredential, params.baseUrl].filter(Boolean);
-  if (!params.credential.trim() && !params.fallbackCredential.trim()) {
-    return failedResult(
-      params.manifest,
-      params.model,
-      'credential',
-      'Provider credential is missing.',
-      0,
-    );
-  }
-  if (params.model.baseUrlAlias && !params.baseUrl.trim())
-    return failedResult(
-      params.manifest,
-      params.model,
-      'credential',
-      'Provider base URL is missing.',
-      0,
-    );
+  const secrets = Object.values(params.authEnvironment);
   try {
     materializeTarget(params.manifest, workspace);
     pullAndVerifyImage(params.manifest);
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
+      ...params.authEnvironment,
       MODEL: params.model.model,
-      [params.model.credentialAlias]: params.credential,
     };
-    if (params.model.fallbackCredentialAlias)
-      env[params.model.fallbackCredentialAlias] = params.fallbackCredential;
-    if (params.model.baseUrlAlias) env[params.model.baseUrlAlias] = params.baseUrl;
-    delete env.MODEL_CREDENTIAL;
-    delete env.MODEL_FALLBACK_CREDENTIAL;
-    delete env.MODEL_BASE_URL;
-    delete env.MODEL_BASE_URL_SECRET;
+    for (const name of Object.keys(env)) {
+      if (name.startsWith(AUTH_ENV_PREFIX)) delete env[name];
+    }
     const timeout = (params.manifest.reviewConfig.timeBudgetMinutes + 5) * 60_000;
     const child = spawnSync(
       'docker',
       dockerRunArgs(
         params.manifest,
-        params.model,
         workspace,
         resolve(params.manifestPath),
         outputDirectory,
+        Object.keys(params.authEnvironment),
       ),
       { env, encoding: 'utf8', stdio: 'pipe', timeout, maxBuffer: 4 * 1024 * 1024 },
     );
@@ -330,15 +312,14 @@ function main(): void {
   const modelIndex = Number(process.env.MODEL_INDEX);
   const model = manifest.models[modelIndex];
   if (!model) throw new Error('MODEL_INDEX is not present in the comparison manifest.');
+  const authEnvironment = readJbotAuthEnvironment(process.env);
   mkdirSync(artifactDirectory, { recursive: true });
   const result = runArenaWorker({
     manifest,
     model,
     manifestPath,
     workRoot,
-    credential: process.env.MODEL_CREDENTIAL ?? '',
-    fallbackCredential: process.env.MODEL_FALLBACK_CREDENTIAL ?? '',
-    baseUrl: process.env.MODEL_BASE_URL || process.env.MODEL_BASE_URL_SECRET || '',
+    authEnvironment,
   });
   writeFileSync(join(artifactDirectory, 'result.json'), `${JSON.stringify(result)}\n`, {
     flag: 'wx',
@@ -349,12 +330,7 @@ function main(): void {
     const telemetry = readFileSync(telemetryPath, 'utf8');
     writeFileSync(
       join(artifactDirectory, 'telemetry.jsonl'),
-      redactSecrets(telemetry, [
-        process.env.MODEL_CREDENTIAL ?? '',
-        process.env.MODEL_FALLBACK_CREDENTIAL ?? '',
-        process.env.MODEL_BASE_URL ?? '',
-        process.env.MODEL_BASE_URL_SECRET ?? '',
-      ]),
+      redactSecrets(telemetry, Object.values(authEnvironment)),
     );
   } catch {
     // Telemetry is unavailable for setup failures and some opaque backends.

@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { dockerRunArgs, failedResult, materializeTarget } from '../src/worker.ts';
+import {
+  dockerRunArgs,
+  failedResult,
+  materializeTarget,
+  readJbotAuthEnvironment,
+} from '../src/worker.ts';
 import { fixtureManifest } from './helpers.ts';
 
 function git(cwd: string, args: string[]): string {
@@ -13,16 +18,20 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe('arena worker boundary', () => {
-  it('builds a pinned container invocation with only the selected provider auth routes', () => {
-    const manifest = fixtureManifest(['grok/default']);
-    manifest.models[0]!.credentialAlias = 'GROK_AUTH_JSON';
-    manifest.models[0]!.fallbackCredentialAlias = 'XAI_API_KEY';
+  it('builds a pinned container invocation with J-Bot auth isolated from runner tokens', () => {
+    const manifest = fixtureManifest(['cline/cline-free/model']);
+    const auth = readJbotAuthEnvironment({
+      JBOT_AUTH_CLINE_AUTH_JSON: 'secret-value',
+      JBOT_AUTH_EMPTY: '',
+      GITHUB_TOKEN: 'github-token',
+    });
+    assert.deepEqual(auth, { CLINE_AUTH_JSON: 'secret-value' });
     const args = dockerRunArgs(
       manifest,
-      manifest.models[0]!,
       '/target',
       '/control/comparison.json',
       '/out',
+      Object.keys(auth),
     );
     assert.ok(args.includes('type=bind,src=/target,dst=/workspace,readonly'));
     assert.ok(
@@ -30,8 +39,7 @@ describe('arena worker boundary', () => {
         'type=bind,src=/control/comparison.json,dst=/run/jbot-comparison/comparison.json,readonly',
       ),
     );
-    assert.ok(args.includes('GROK_AUTH_JSON'));
-    assert.ok(args.includes('XAI_API_KEY'));
+    assert.ok(args.includes('CLINE_AUTH_JSON'));
     assert.doesNotMatch(args.join(' '), /github.token|GITHUB_TOKEN|secret-value/);
     assert.ok(args.includes(`ghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`));
   });
@@ -77,13 +85,13 @@ describe('arena worker boundary', () => {
     const result = failedResult(
       manifest,
       manifest.models[0]!,
-      'credential',
+      'runner-exit',
       'token=secret-value',
       12,
       ['secret-value'],
     );
     assert.equal(result.status, 'failed');
-    assert.equal(result.failure?.class, 'credential');
+    assert.equal(result.failure?.class, 'runner-exit');
     assert.doesNotMatch(result.failure!.message, /secret-value/);
     assert.equal(result.usage.sessions, 0);
     assert.equal(result.provenance.backend, null);
