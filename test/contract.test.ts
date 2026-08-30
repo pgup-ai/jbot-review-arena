@@ -92,10 +92,11 @@ describe('versioned contracts', () => {
       token: ['prefix-[REDACTED]', 1],
     });
     const secrets = expandSecretsForRedaction([
-      '{"access_token":"nested-secret","metadata":"provider"}',
+      '{"access_token":"nested-secret","authorization":"Bearer authorization-secret","metadata":"provider"}',
       'security',
     ]);
     assert.ok(secrets.includes('nested-secret'));
+    assert.ok(secrets.includes('Bearer authorization-secret'));
     assert.ok(!secrets.includes('provider'));
     const review = redactReviewSecrets(
       {

@@ -634,7 +634,7 @@ export function redactSecrets(text: string, secrets: string[]): string {
 export function expandSecretsForRedaction(secrets: string[]): string[] {
   const expanded = new Set(secrets.filter(Boolean));
   const isSensitiveKey = (key: string): boolean =>
-    /(^|_)(key|token|secret|password|credential|auth)$/.test(
+    /(^|_)(key|token|secret|password|credential|auth|authorization)$/.test(
       key.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase(),
     );
   const collect = (value: unknown, sensitive = false): void => {

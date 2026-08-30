@@ -24,6 +24,7 @@ describe('arena worker boundary', () => {
       JBOT_AUTH_JSON: JSON.stringify({
         CLINE_AUTH_JSON: 'secret-value',
         FUTURE_PROVIDER_TOKEN: 'future-secret',
+        _INTERNAL_TOKEN: 'internal-secret',
         EMPTY: '',
         github_token: 'automatic-token',
         GITHUB_TOKEN: 'github-token',
@@ -33,6 +34,7 @@ describe('arena worker boundary', () => {
     assert.deepEqual(auth, {
       CLINE_AUTH_JSON: 'secret-value',
       FUTURE_PROVIDER_TOKEN: 'future-secret',
+      _INTERNAL_TOKEN: 'internal-secret',
     });
     const args = dockerRunArgs(manifest, '/target', '/control/comparison.json', '/out');
     assert.ok(args.includes('type=bind,src=/target,dst=/workspace,readonly'));

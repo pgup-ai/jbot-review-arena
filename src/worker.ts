@@ -49,7 +49,7 @@ export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, 
       (entry): entry is [string, string] =>
         typeof entry[1] === 'string' &&
         Boolean(entry[1]) &&
-        /^[A-Z][A-Z0-9_]*$/.test(entry[0]) &&
+        /^[A-Z_][A-Z0-9_]*$/.test(entry[0]) &&
         !GITHUB_TOKEN_NAMES.has(entry[0]),
     ),
   );

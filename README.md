@@ -16,8 +16,9 @@ arena PR. Target repositories are never modified.
 
 Set repository variable `JBOT_COMMIT_SHA` to a published 40-character J-Bot
 commit SHA. Keep repository-accessible organization secrets narrowly scoped and
-spend-capped: the trusted worker passes the Actions secrets context, except
-GitHub tokens, to the image. J-Bot resolves the requested model and credential.
+spend-capped: the trusted worker passes the Actions secrets context, except the
+built-in GitHub token aliases, to the image. J-Bot resolves the requested model
+and credential; arbitrary custom secret names cannot identify their purpose.
 
 The long-lived arena PR is intentionally content-free; each new `/compare`
 comment creates a new immutable sample.

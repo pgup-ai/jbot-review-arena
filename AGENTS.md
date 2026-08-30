@@ -14,7 +14,7 @@ contains no review logic.
 ## Invariants
 
 1. Only trusted `issue_comment.created` commands from arena maintainers fan out.
-2. Workers pass the Actions secrets context only to the trusted J-Bot image and exclude GitHub tokens.
+2. Workers pass the Actions secrets context only to the trusted J-Bot image and exclude Actions' built-in GitHub token aliases.
 3. Target repositories are public, frozen by SHA, mounted read-only, and never executed.
 4. Every worker uses the same full-SHA J-Bot image digest resolved by prepare.
 5. Publisher inputs are untrusted. Render prose inert and edit/delete only bot comments with exact markers.
