@@ -1,0 +1,133 @@
+name: J-Bot model comparison
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions: {}
+
+jobs:
+  prepare:
+    if: github.event.issue.pull_request && startsWith(github.event.comment.body, '/compare ')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+    env:
+      JBOT_COMMIT_SHA: ${{ vars.JBOT_COMMIT_SHA }}
+      JBOT_IMAGE_REPOSITORY: ghcr.io/pgup-ai/jbot-review
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Resolve the pinned J-Bot image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$JBOT_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+          image="$JBOT_IMAGE_REPOSITORY:$JBOT_COMMIT_SHA"
+          docker pull --quiet "$image"
+          pinned="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
+          digest="${pinned##*@}"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Freeze comparison
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          JBOT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          COMPARISON_OUTPUT: ${{ runner.temp }}/comparison.json
+        run: node dist/prepare.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comparison-manifest
+          path: ${{ runner.temp }}/comparison.json
+          if-no-files-found: error
+          retention-days: 30
+
+  review:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/download-artifact@v5
+        with:
+          name: comparison-manifest
+          path: ${{ runner.temp }}/control
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Run isolated review
+        env:
+          COMPARISON_MANIFEST: ${{ runner.temp }}/control/comparison.json
+          ARTIFACT_DIRECTORY: ${{ runner.temp }}/artifact
+          MODEL_INDEX: ${{ matrix.index }}
+          MODEL_CREDENTIAL: ${{ secrets[matrix.credentialAlias] }}
+        run: node dist/worker.js
+      - name: Upload model result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifactName }}
+          path: ${{ runner.temp }}/artifact
+          if-no-files-found: ignore
+          retention-days: 30
+
+  publish:
+    if: always() && needs.prepare.result == 'success'
+    needs: [prepare, review]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/download-artifact@v5
+        with:
+          name: comparison-manifest
+          path: ${{ runner.temp }}/control
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: model-*
+          path: ${{ runner.temp }}/results
+      - name: Publish comparison
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMPARISON_MANIFEST: ${{ runner.temp }}/control/comparison.json
+          ARTIFACTS_ROOT: ${{ runner.temp }}/results
+        run: node dist/publish.js
