@@ -53,7 +53,7 @@ describe('arena worker boundary', () => {
     assert.throws(() => readJbotAuthEnvironment({ JBOT_AUTH_JSON: '[]' }), /must be a JSON object/);
   });
 
-  it('materializes exact fork head/base commits and leaves a clean detached checkout', () => {
+  it('materializes exact fork head/base commits and their frozen diff', () => {
     const root = mkdtempSync(join(tmpdir(), 'jbot-arena-checkout-'));
     const base = join(root, 'base');
     const head = join(root, 'head');
@@ -62,12 +62,18 @@ describe('arena worker boundary', () => {
       git(root, ['init', '-q', '-b', 'main', base]);
       git(base, ['config', 'user.email', 'test@example.com']);
       git(base, ['config', 'user.name', 'test']);
+      git(base, ['config', 'uploadpack.allowFilter', 'true']);
       writeFileSync(join(base, 'code.ts'), 'export const value = 1;\n');
       git(base, ['add', '.']);
       git(base, ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'base']);
+      const mergeBase = git(base, ['rev-parse', 'HEAD']);
       execFileSync('git', ['clone', '-q', base, head]);
       git(head, ['config', 'user.email', 'test@example.com']);
       git(head, ['config', 'user.name', 'test']);
+      git(head, ['config', 'uploadpack.allowFilter', 'true']);
+      writeFileSync(join(base, 'code.ts'), 'export const value = 2;\n');
+      git(base, ['add', '.']);
+      git(base, ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'base tip']);
       writeFileSync(join(head, 'code.ts'), 'export const value = 2;\n');
       git(head, ['add', '.']);
       git(head, ['-c', 'commit.gpgsign=false', 'commit', '-qm', 'head']);
@@ -78,12 +84,15 @@ describe('arena worker boundary', () => {
       manifest.target.head.sha = git(head, ['rev-parse', 'HEAD']);
       materializeTarget(manifest, workspace);
       assert.equal(git(workspace, ['rev-parse', 'HEAD']), manifest.target.head.sha);
-      assert.equal(
-        git(workspace, ['merge-base', manifest.target.base.sha, 'HEAD']),
-        manifest.target.base.sha,
-      );
+      assert.equal(git(workspace, ['merge-base', manifest.target.base.sha, 'HEAD']), mergeBase);
       assert.equal(git(workspace, ['status', '--porcelain=v1', '--untracked-files=all']), '');
       assert.equal(readFileSync(join(workspace, 'code.ts'), 'utf8'), 'export const value = 2;\n');
+      git(workspace, ['remote', 'set-url', 'head', join(root, 'missing')]);
+      git(workspace, ['remote', 'set-url', 'base', join(root, 'missing')]);
+      assert.match(
+        git(workspace, ['diff', `${manifest.target.base.sha}...${manifest.target.head.sha}`]),
+        /-export const value = 1;\n\+export const value = 2;/,
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

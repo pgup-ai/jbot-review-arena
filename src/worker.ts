@@ -81,6 +81,18 @@ export function materializeTarget(manifest: ComparisonManifestV1, workspace: str
     }
     run('git', ['cat-file', '-e', `${manifest.target.base.sha}^{commit}`], workspace);
     run('git', ['merge-base', manifest.target.base.sha, manifest.target.head.sha], workspace);
+    // Hydrate the merge-base diff before the checkout is mounted read-only.
+    execFileSync(
+      'git',
+      [
+        'diff',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--find-renames',
+        `${manifest.target.base.sha}...${manifest.target.head.sha}`,
+      ],
+      { cwd: workspace, stdio: 'ignore' },
+    );
     if (run('git', ['status', '--porcelain=v1', '--untracked-files=all'], workspace)) {
       throw new Error('Target checkout is dirty.');
     }
