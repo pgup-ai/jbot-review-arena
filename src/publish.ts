@@ -43,17 +43,22 @@ function utf8Chunks(text: string, maxBytes: number): string[] {
   return chunks;
 }
 
-export function inertFence(text: string): string {
-  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((match) => match[0].length));
-  const fence = '`'.repeat(Math.max(3, longest + 1));
-  return `${fence}\n${text}\n${fence}`;
+export function safeMarkdown(text: string): string {
+  return text
+    .replace(/@(?=[A-Za-z0-9_-])/g, '@\u200b')
+    .replace(/(^|\W)#(?=\d)/g, '$1#\u200b')
+    .replaceAll('<', '<\u200b')
+    .replaceAll('![', '!\u200b[')
+    .replaceAll('](', ']\u200b(')
+    .replaceAll('][', ']\u200b[')
+    .replace(/\bhttps?:\/\//gi, (url) => url.replace(':', ':\u200b'));
 }
 
-function fencedBlocks(label: string, text: string): string[] {
-  const chunks = utf8Chunks(text, FIELD_CHUNK_BUDGET);
+function markdownBlocks(label: string, text: string): string[] {
+  const chunks = utf8Chunks(safeMarkdown(text), FIELD_CHUNK_BUDGET);
   return chunks.map(
     (chunk, index) =>
-      `### ${label}${chunks.length > 1 ? ` · part ${index + 1}/${chunks.length}` : ''}\n\n${inertFence(chunk)}`,
+      `### ${label}${chunks.length > 1 ? ` · ${index + 1}/${chunks.length}` : ''}\n\n${chunk}`,
   );
 }
 
@@ -111,18 +116,44 @@ function targetLocation(manifest: ComparisonManifestV1, finding: ArenaFindingV1)
   return `https://github.com/${repository}/blob/${manifest.target.head.sha}/${path}${line}`;
 }
 
+function inlineCode(text: string): string {
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((match) => match[0].length));
+  const fence = '`'.repeat(longest + 1);
+  return `${fence} ${text} ${fence}`;
+}
+
 function reportBlocks(manifest: ComparisonManifestV1, result: ArenaResultV1): string[] {
   if (result.failure)
-    return fencedBlocks('Failure', `${result.failure.class}: ${result.failure.message}`);
+    return markdownBlocks('Failure', `**${result.failure.class}**\n\n${result.failure.message}`);
   if (!result.review) return ['### Result\n\nSkipped: no reviewable changes.'];
-  const blocks = fencedBlocks('Summary', result.review.summary);
+  const blocks = result.review.summary.trim()
+    ? markdownBlocks('Summary', result.review.summary)
+    : result.review.findings.length === 0
+      ? ['No findings reported.']
+      : [];
   result.review.findings.forEach((finding, index) => {
-    const identity = `Finding ${index + 1} · ${finding.severity}`;
+    const title = safeMarkdown(finding.title.replace(/[\r\n]+/g, ' '));
+    const location = `${finding.path}:${finding.line}`;
+    const details = utf8Chunks(safeMarkdown(finding.body), FIELD_CHUNK_BUDGET);
+    const evidence = finding.evidence
+      ? utf8Chunks(safeMarkdown(finding.evidence), FIELD_CHUNK_BUDGET)
+      : [];
     blocks.push(
-      `### ${identity}\n\n[Open frozen target location](${targetLocation(manifest, finding)})\n\n${inertFence(`${finding.path}:${finding.line}`)}`,
-      ...fencedBlocks(`${identity} title`, finding.title),
-      ...fencedBlocks(`${identity} details`, finding.body),
-      ...(finding.evidence ? fencedBlocks(`${identity} evidence`, finding.evidence) : []),
+      `### ${index + 1}. ${finding.severity} · ${title}\n\n[${inlineCode(location)}](${targetLocation(manifest, finding)})\n\n${details[0]}`,
+      ...details
+        .slice(1)
+        .map(
+          (detail, detailIndex) =>
+            `#### Details · ${detailIndex + 2}/${details.length}\n\n${detail}`,
+        ),
+      ...evidence.map((chunk, evidenceIndex) => {
+        const label =
+          evidenceIndex === 0 ? 'Evidence' : `Evidence · ${evidenceIndex + 1}/${evidence.length}`;
+        return chunk
+          .split('\n')
+          .map((line, lineIndex) => `> ${lineIndex === 0 ? `**${label}**\n>\n> ` : ''}${line}`)
+          .join('\n');
+      }),
     );
   });
   return blocks;
@@ -136,12 +167,13 @@ export function renderModelReportParts(
   const groups: string[][] = [[]];
   for (const block of blocks) {
     const current = groups.at(-1)!;
-    const estimate = `${modelMarker(manifest.arena.commandCommentId, result.model, groups.length)}\n## Model report · \`${result.model}\`\n\n${[...current, block].join('\n\n')}`;
+    const estimate = `${modelMarker(manifest.arena.commandCommentId, result.model, groups.length)}\n## \`${result.model}\`\n\n${[...current, block].join('\n\n')}`;
     if (current.length > 0 && Buffer.byteLength(estimate) > COMMENT_BUDGET) groups.push([block]);
     else current.push(block);
   }
   return groups.map((group, index) => {
-    const body = `${modelMarker(manifest.arena.commandCommentId, result.model, index + 1)}\n## Model report · \`${result.model}\` · part ${index + 1}/${groups.length}\n\n${group.join('\n\n')}`;
+    const part = groups.length > 1 ? ` · ${index + 1}/${groups.length}` : '';
+    const body = `${modelMarker(manifest.arena.commandCommentId, result.model, index + 1)}\n## \`${result.model}\`${part}\n\n${group.join('\n\n')}`;
     if (Buffer.byteLength(body) > COMMENT_BUDGET)
       throw new Error('Rendered model report exceeds the comment budget.');
     return body;
