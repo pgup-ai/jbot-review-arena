@@ -14,7 +14,6 @@ interface PrepareInput {
   arenaRepository: string;
   workflowRunId: number;
   runAttempt: number;
-  jbotCommitSha: string;
   imageRepository: string;
   imageDigest: string;
   resolvePull: (owner: string, repo: string, number: number) => Promise<GitHubPullRequest>;
@@ -92,8 +91,7 @@ export async function prepareComparison(input: PrepareInput): Promise<Comparison
       },
     },
     jbot: {
-      commitSha: input.jbotCommitSha,
-      imageRef: `${input.imageRepository}:${input.jbotCommitSha}`,
+      imageRef: `${input.imageRepository}:latest`,
       imageDigest: input.imageDigest,
     },
     reviewConfig: DEFAULT_REVIEW_CONFIG,
@@ -114,7 +112,6 @@ async function main(): Promise<void> {
     arenaRepository: process.env.GITHUB_REPOSITORY ?? '',
     workflowRunId: Number(process.env.GITHUB_RUN_ID),
     runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
-    jbotCommitSha: process.env.JBOT_COMMIT_SHA ?? '',
     imageRepository: process.env.JBOT_IMAGE_REPOSITORY ?? '',
     imageDigest: process.env.JBOT_IMAGE_DIGEST ?? '',
     resolvePull: (owner, repo, number) => getPublicPullRequest(owner, repo, number, token),

@@ -7,7 +7,6 @@ import {
 
 export const BASE_SHA = '1'.repeat(40);
 export const HEAD_SHA = '2'.repeat(40);
-export const JBOT_SHA = '3'.repeat(40);
 export const IMAGE_DIGEST = `sha256:${'4'.repeat(64)}`;
 
 export function fixtureManifest(models = ['openrouter/openai/gpt-oss:free']): ComparisonManifestV1 {
@@ -42,8 +41,7 @@ export function fixtureManifest(models = ['openrouter/openai/gpt-oss:free']): Co
       },
     },
     jbot: {
-      commitSha: JBOT_SHA,
-      imageRef: `ghcr.io/pgup-ai/jbot-review:${JBOT_SHA}`,
+      imageRef: 'ghcr.io/pgup-ai/jbot-review:latest',
       imageDigest: IMAGE_DIGEST,
     },
     reviewConfig: DEFAULT_REVIEW_CONFIG,
@@ -68,7 +66,6 @@ export function completedResult(manifest: ComparisonManifestV1, modelIndex = 0):
     provenance: {
       targetBaseSha: manifest.target.base.sha,
       targetHeadSha: manifest.target.head.sha,
-      jbotCommitSha: manifest.jbot.commitSha,
       imageRef: manifest.jbot.imageRef,
       imageDigest: manifest.jbot.imageDigest,
       backend: 'opencode',

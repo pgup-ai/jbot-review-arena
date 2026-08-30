@@ -16,7 +16,6 @@ jobs:
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
     env:
-      JBOT_COMMIT_SHA: ${{ vars.JBOT_COMMIT_SHA }}
       JBOT_IMAGE_REPOSITORY: ghcr.io/pgup-ai/jbot-review
     steps:
       - uses: actions/checkout@v7
@@ -37,8 +36,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$JBOT_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
-          image="$JBOT_IMAGE_REPOSITORY:$JBOT_COMMIT_SHA"
+          image="$JBOT_IMAGE_REPOSITORY:latest"
           docker pull --quiet "$image"
           pinned="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           digest="${pinned##*@}"
