@@ -183,6 +183,22 @@ export function renderModelReportParts(
   });
 }
 
+export function renderComparisonComments(
+  manifest: ComparisonManifestV1,
+  results: ArenaResultV1[],
+  historical: boolean,
+): string[] {
+  const summary = renderSummary(manifest, results, historical);
+  const reports = results.map((result) => {
+    const findings = result.review?.findings.length ?? 0;
+    const count = `${findings} finding${findings === 1 ? '' : 's'}`;
+    return `<details>\n<summary><code>${result.model}</code> · ${result.status} · ${count}</summary>\n\n${reportBlocks(manifest, result).join('\n\n')}\n\n</details>`;
+  });
+  const combined = `${summary}\n\n## Model reports\n\n${reports.join('\n\n')}`;
+  if (Buffer.byteLength(combined) <= COMMENT_BUDGET) return [combined];
+  return [summary, ...results.flatMap((result) => renderModelReportParts(manifest, result))];
+}
+
 function missingResult(manifest: ComparisonManifestV1, model: ComparisonModelV1): ArenaResultV1 {
   return validateArenaResult(
     {
@@ -331,10 +347,11 @@ async function main(): Promise<void> {
     `/repos/${manifest.target.owner}/${manifest.target.repository}/pulls/${manifest.target.prNumber}`,
     token,
   );
-  const desiredBodies = [
-    renderSummary(manifest, results, current.head.sha !== manifest.target.head.sha),
-    ...results.flatMap((result) => renderModelReportParts(manifest, result)),
-  ];
+  const desiredBodies = renderComparisonComments(
+    manifest,
+    results,
+    current.head.sha !== manifest.target.head.sha,
+  );
   await reconcileComments({
     repository: manifest.arena.repository,
     issueNumber: manifest.arena.prNumber,

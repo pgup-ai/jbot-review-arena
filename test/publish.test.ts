@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import {
   loadResults,
   reconcileComments,
+  renderComparisonComments,
   renderModelReportParts,
   renderSummary,
   safeMarkdown,
@@ -61,6 +62,14 @@ describe('safe publisher rendering', () => {
     assert.doesNotMatch(rendered, /Finding 1|title|details|part 1\/1|```/);
     second.review!.summary = '';
     assert.match(renderModelReportParts(manifest, second)[0]!, /No findings reported\./);
+    const combined = renderComparisonComments(manifest, [second], false);
+    assert.equal(combined.length, 1);
+    assert.match(
+      combined[0]!,
+      /<details>[\s\S]*<summary><code>nvidia\/moonshotai\/kimi-k3<\/code>/,
+    );
+    assert.doesNotMatch(combined[0]!, /:model=/);
+    assert.ok(renderComparisonComments(manifest, [first, second], false).length > 1);
   });
 
   it('synthesizes missing and invalid artifacts in requested model order', () => {
