@@ -75,7 +75,7 @@ describe('safe publisher rendering', () => {
     assert.ok(renderComparisonComments(manifest, [first, second], false).length > 1);
   });
 
-  it('renders evidence as code without interpreting diff lines as lists', () => {
+  it('renders evidence as bounded code without interpreting Markdown', () => {
     const manifest = fixtureManifest();
     const result = completedResult(manifest);
     const finding = {
@@ -97,6 +97,10 @@ describe('safe publisher rendering', () => {
       renderModelReportParts(manifest, result).join('\n'),
       /\*\*Evidence\*\*\n\n````\n\+if \(ready\) \{\n\+  run\("```"\)\n\+\}\n````/,
     );
+    finding.evidence = '`'.repeat(32 * 1024);
+    const parts = renderModelReportParts(manifest, result);
+    assert.ok(parts.length > 1);
+    assert.ok(parts.every((part) => Buffer.byteLength(part) <= 60 * 1024));
   });
 
   it('synthesizes missing and invalid artifacts in requested model order', () => {

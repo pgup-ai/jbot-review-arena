@@ -139,7 +139,8 @@ function fencedCode(text: string): string {
 function evidenceBlocks(text: string): string[] {
   const normalized = text.replace(/\r\n?/g, '\n');
   const multiline = normalized.includes('\n');
-  return utf8Chunks(normalized, FIELD_CHUNK_BUDGET).map((chunk) =>
+  const chunkBudget = Math.min(FIELD_CHUNK_BUDGET, Math.floor(COMMENT_BUDGET / 4));
+  return utf8Chunks(normalized, chunkBudget).map((chunk) =>
     multiline ? fencedCode(chunk) : inlineCode(chunk),
   );
 }
