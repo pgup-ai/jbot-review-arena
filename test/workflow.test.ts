@@ -12,9 +12,11 @@ it('keeps workflow fan-out, failure publication, artifacts, and permissions expl
   assert.match(workflow, /matrix: \$\{\{ fromJSON\(needs\.prepare\.outputs\.matrix\) \}\}/);
   assert.match(workflow, /publish:\n\s+if: always\(\) && needs\.prepare\.result == 'success'/);
   assert.match(workflow, /name: \$\{\{ matrix\.artifactName \}\}/);
-  assert.match(workflow, /MODEL_CREDENTIAL: \$\{\{ secrets\[matrix\.credentialAlias\] \}\}/);
+  assert.match(workflow, /JBOT_AUTH_JSON: \$\{\{ toJSON\(secrets\) \}\}/);
+  assert.doesNotMatch(workflow, /secrets\.[A-Z]/);
+  assert.doesNotMatch(workflow, /matrix\.(?:provider|credential)/);
   const reviewJob = workflow.slice(workflow.indexOf('  review:'), workflow.indexOf('  publish:'));
   assert.doesNotMatch(reviewJob, /issues: write/);
   const publishJob = workflow.slice(workflow.indexOf('  publish:'));
-  assert.doesNotMatch(publishJob, /MODEL_CREDENTIAL|OPENROUTER_API_KEY|NVIDIA_API_KEY/);
+  assert.doesNotMatch(publishJob, /JBOT_AUTH_JSON/);
 });

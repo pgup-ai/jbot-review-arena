@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { dockerRunArgs, failedResult, materializeTarget } from '../src/worker.ts';
+import {
+  dockerRunArgs,
+  failedResult,
+  materializeTarget,
+  readJbotAuthEnvironment,
+} from '../src/worker.ts';
 import { fixtureManifest } from './helpers.ts';
 
 function git(cwd: string, args: string[]): string {
@@ -13,24 +18,38 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe('arena worker boundary', () => {
-  it('builds a pinned container invocation with a read-only target and one credential alias', () => {
-    const manifest = fixtureManifest();
-    const args = dockerRunArgs(
-      manifest,
-      manifest.models[0]!,
-      '/target',
-      '/control/comparison.json',
-      '/out',
-    );
+  it('builds a pinned container invocation with J-Bot auth isolated from runner tokens', () => {
+    const manifest = fixtureManifest(['cline/cline-free/model']);
+    const auth = readJbotAuthEnvironment({
+      JBOT_AUTH_JSON: JSON.stringify({
+        CLINE_AUTH_JSON: 'secret-value',
+        FUTURE_PROVIDER_TOKEN: 'future-secret',
+        _INTERNAL_TOKEN: 'internal-secret',
+        EMPTY: '',
+        github_token: 'automatic-token',
+        GITHUB_TOKEN: 'github-token',
+        GH_TOKEN: 'gh-token',
+      }),
+    });
+    assert.deepEqual(auth, {
+      CLINE_AUTH_JSON: 'secret-value',
+      FUTURE_PROVIDER_TOKEN: 'future-secret',
+      _INTERNAL_TOKEN: 'internal-secret',
+    });
+    const args = dockerRunArgs(manifest, '/target', '/control/comparison.json', '/out');
     assert.ok(args.includes('type=bind,src=/target,dst=/workspace,readonly'));
     assert.ok(
       args.includes(
         'type=bind,src=/control/comparison.json,dst=/run/jbot-comparison/comparison.json,readonly',
       ),
     );
-    assert.ok(args.includes('OPENROUTER_API_KEY'));
-    assert.doesNotMatch(args.join(' '), /github.token|GITHUB_TOKEN|secret-value/);
+    assert.ok(args.includes('JBOT_AUTH_JSON'));
+    assert.doesNotMatch(
+      args.join(' '),
+      /CLINE_AUTH_JSON|FUTURE_PROVIDER_TOKEN|github.token|GITHUB_TOKEN|GH_TOKEN|secret-value/,
+    );
     assert.ok(args.includes(`ghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`));
+    assert.throws(() => readJbotAuthEnvironment({ JBOT_AUTH_JSON: '[]' }), /must be a JSON object/);
   });
 
   it('materializes exact fork head/base commits and leaves a clean detached checkout', () => {
@@ -74,13 +93,13 @@ describe('arena worker boundary', () => {
     const result = failedResult(
       manifest,
       manifest.models[0]!,
-      'credential',
+      'runner-exit',
       'token=secret-value',
       12,
       ['secret-value'],
     );
     assert.equal(result.status, 'failed');
-    assert.equal(result.failure?.class, 'credential');
+    assert.equal(result.failure?.class, 'runner-exit');
     assert.doesNotMatch(result.failure!.message, /secret-value/);
     assert.equal(result.usage.sessions, 0);
     assert.equal(result.provenance.backend, null);

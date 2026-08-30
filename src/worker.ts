@@ -5,9 +5,12 @@ import { performance } from 'node:perf_hooks';
 
 import {
   emptyUsage,
+  expandSecretsForRedaction,
   parseJbotOutput,
   parseManifest,
   redactSecrets,
+  redactSecretsFromValue,
+  redactReviewSecrets,
   sanitizeFailureMessage,
   validateArenaResult,
   type ArenaFailureClass,
@@ -24,6 +27,32 @@ class WorkerFailure extends Error {
   ) {
     super(message);
   }
+}
+
+const SECRETS_ENV = 'JBOT_AUTH_JSON';
+const GITHUB_TOKEN_NAMES = new Set(['GITHUB_TOKEN', 'GH_TOKEN']);
+
+export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const raw = env[SECRETS_ENV]?.trim();
+  if (!raw) return {};
+  let secrets: unknown;
+  try {
+    secrets = JSON.parse(raw);
+  } catch {
+    throw new Error(`${SECRETS_ENV} must be valid JSON.`);
+  }
+  if (!secrets || typeof secrets !== 'object' || Array.isArray(secrets)) {
+    throw new Error(`${SECRETS_ENV} must be a JSON object.`);
+  }
+  return Object.fromEntries(
+    Object.entries(secrets).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' &&
+        Boolean(entry[1]) &&
+        /^[A-Z_][A-Z0-9_]*$/.test(entry[0]) &&
+        !GITHUB_TOKEN_NAMES.has(entry[0]),
+    ),
+  );
 }
 
 function run(command: string, args: string[], cwd?: string): string {
@@ -62,7 +91,6 @@ export function materializeTarget(manifest: ComparisonManifestV1, workspace: str
 
 export function dockerRunArgs(
   manifest: ComparisonManifestV1,
-  model: ComparisonModelV1,
   workspace: string,
   manifestPath: string,
   outputDirectory: string,
@@ -81,7 +109,7 @@ export function dockerRunArgs(
     '--env',
     'MODEL',
     '--env',
-    model.credentialAlias,
+    SECRETS_ENV,
     '--entrypoint',
     'node',
     `${manifest.jbot.imageRef.split(':').slice(0, -1).join(':')}@${manifest.jbot.imageDigest}`,
@@ -98,8 +126,9 @@ function resultFromJbot(
   model: ComparisonModelV1,
   output: JbotArenaOutputV1,
   workerMs: number,
-  credential: string,
+  secrets: string[],
 ): ArenaResultV1 {
+  const redactionSecrets = expandSecretsForRedaction(secrets);
   return validateArenaResult(
     {
       schemaVersion: 1,
@@ -119,15 +148,15 @@ function resultFromJbot(
         workflowRunId: manifest.arena.workflowRunId,
         runAttempt: manifest.arena.runAttempt,
         reviewConfig: manifest.reviewConfig,
-        resolvedModelOptions: output.resolvedModelOptions,
+        resolvedModelOptions: redactSecretsFromValue(output.resolvedModelOptions, redactionSecrets),
       },
       timing: { reviewMs: output.reviewMs, workerMs },
       usage: output.usage,
-      review: output.review,
+      review: redactReviewSecrets(output.review, redactionSecrets),
       failure: output.failure
         ? {
             class: output.failure.class,
-            message: sanitizeFailureMessage(output.failure.message, [credential]),
+            message: sanitizeFailureMessage(output.failure.message, redactionSecrets),
           }
         : null,
     },
@@ -143,6 +172,7 @@ export function failedResult(
   workerMs: number,
   secrets: string[] = [],
 ): ArenaResultV1 {
+  const redactionSecrets = expandSecretsForRedaction(secrets);
   return validateArenaResult(
     {
       schemaVersion: 1,
@@ -167,7 +197,10 @@ export function failedResult(
       timing: { reviewMs: null, workerMs },
       usage: emptyUsage(),
       review: null,
-      failure: { class: failureClass, message: sanitizeFailureMessage(error, secrets) },
+      failure: {
+        class: failureClass,
+        message: sanitizeFailureMessage(error, redactionSecrets),
+      },
     },
     manifest,
   );
@@ -197,40 +230,25 @@ export function runArenaWorker(params: {
   model: ComparisonModelV1;
   manifestPath: string;
   workRoot: string;
-  credential: string;
+  authEnvironment: Record<string, string>;
 }): ArenaResultV1 {
   const startedAt = performance.now();
   const workspace = resolve(params.workRoot, 'workspace');
   const outputDirectory = resolve(params.workRoot, 'output');
   mkdirSync(outputDirectory, { recursive: true });
-  if (!params.credential.trim()) {
-    return failedResult(
-      params.manifest,
-      params.model,
-      'credential',
-      'Provider credential is missing.',
-      0,
-    );
-  }
+  const secrets = Object.values(params.authEnvironment);
   try {
     materializeTarget(params.manifest, workspace);
     pullAndVerifyImage(params.manifest);
-    const env = {
+    const env: NodeJS.ProcessEnv = {
       ...process.env,
+      [SECRETS_ENV]: JSON.stringify(params.authEnvironment),
       MODEL: params.model.model,
-      [params.model.credentialAlias]: params.credential,
     };
-    delete env.MODEL_CREDENTIAL;
     const timeout = (params.manifest.reviewConfig.timeBudgetMinutes + 5) * 60_000;
     const child = spawnSync(
       'docker',
-      dockerRunArgs(
-        params.manifest,
-        params.model,
-        workspace,
-        resolve(params.manifestPath),
-        outputDirectory,
-      ),
+      dockerRunArgs(params.manifest, workspace, resolve(params.manifestPath), outputDirectory),
       { env, encoding: 'utf8', stdio: 'pipe', timeout, maxBuffer: 4 * 1024 * 1024 },
     );
     const workerMs = Math.round(performance.now() - startedAt);
@@ -255,7 +273,7 @@ export function runArenaWorker(params: {
         failureClass,
         child.stderr || child.error || error,
         workerMs,
-        [params.credential],
+        secrets,
       );
     }
     if (child.status !== 0 && output.status !== 'failed') {
@@ -265,10 +283,10 @@ export function runArenaWorker(params: {
         child.signal ? 'signal' : 'runner-exit',
         child.stderr || `J-Bot exited ${child.status}.`,
         workerMs,
-        [params.credential],
+        secrets,
       );
     }
-    return resultFromJbot(params.manifest, params.model, output, workerMs, params.credential);
+    return resultFromJbot(params.manifest, params.model, output, workerMs, secrets);
   } catch (error) {
     const failureClass = error instanceof WorkerFailure ? error.failureClass : 'unknown';
     return failedResult(
@@ -277,7 +295,7 @@ export function runArenaWorker(params: {
       failureClass,
       error,
       Math.round(performance.now() - startedAt),
-      [params.credential],
+      secrets,
     );
   }
 }
@@ -305,13 +323,14 @@ function main(): void {
   const modelIndex = Number(process.env.MODEL_INDEX);
   const model = manifest.models[modelIndex];
   if (!model) throw new Error('MODEL_INDEX is not present in the comparison manifest.');
+  const authEnvironment = readJbotAuthEnvironment(process.env);
   mkdirSync(artifactDirectory, { recursive: true });
   const result = runArenaWorker({
     manifest,
     model,
     manifestPath,
     workRoot,
-    credential: process.env.MODEL_CREDENTIAL ?? '',
+    authEnvironment,
   });
   writeFileSync(join(artifactDirectory, 'result.json'), `${JSON.stringify(result)}\n`, {
     flag: 'wx',
@@ -322,7 +341,7 @@ function main(): void {
     const telemetry = readFileSync(telemetryPath, 'utf8');
     writeFileSync(
       join(artifactDirectory, 'telemetry.jsonl'),
-      redactSecrets(telemetry, [process.env.MODEL_CREDENTIAL ?? '']),
+      redactSecrets(telemetry, expandSecretsForRedaction(Object.values(authEnvironment))),
     );
   } catch {
     // Telemetry is unavailable for setup failures and some opaque backends.

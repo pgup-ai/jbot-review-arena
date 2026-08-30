@@ -91,7 +91,7 @@ jobs:
           COMPARISON_MANIFEST: ${{ runner.temp }}/control/comparison.json
           ARTIFACT_DIRECTORY: ${{ runner.temp }}/artifact
           MODEL_INDEX: ${{ matrix.index }}
-          MODEL_CREDENTIAL: ${{ secrets[matrix.credentialAlias] }}
+          JBOT_AUTH_JSON: ${{ toJSON(secrets) }}
         run: node dist/worker.js
       - name: Upload model result
         if: always()

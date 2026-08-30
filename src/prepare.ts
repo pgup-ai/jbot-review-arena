@@ -8,7 +8,6 @@ import {
 } from './contract.ts';
 import { assertAuthorizedArenaComment, parseCompareCommand } from './command.ts';
 import { getPublicPullRequest, type GitHubPullRequest } from './github.ts';
-import { arenaProvider } from './providers.ts';
 
 interface PrepareInput {
   event: Record<string, unknown>;
@@ -55,13 +54,10 @@ export async function prepareComparison(input: PrepareInput): Promise<Comparison
   const commandCommentId = requiredInteger(comment.id, 'comment.id');
   const arenaPrNumber = requiredInteger(issue.number, 'issue.number');
   const models = command.models.map((model, index) => {
-    const provider = model.slice(0, model.indexOf('/'));
-    const configured = arenaProvider(provider)!;
     return {
       index,
       model,
-      provider,
-      credentialAlias: configured.credentialAlias,
+      provider: model.slice(0, model.indexOf('/')),
       artifactName: arenaArtifactName(index, model),
     };
   });

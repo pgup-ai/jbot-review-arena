@@ -51,7 +51,6 @@ export function fixtureManifest(models = ['openrouter/openai/gpt-oss:free']): Co
       index,
       model,
       provider: model.split('/')[0]!,
-      credentialAlias: model.startsWith('nvidia/') ? 'NVIDIA_API_KEY' : 'OPENROUTER_API_KEY',
       artifactName: arenaArtifactName(index, model),
     })),
   };
