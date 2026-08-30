@@ -15,7 +15,8 @@ import {
 import { githubRequest } from './github.ts';
 
 const COMMENT_BUDGET = 60 * 1024;
-const FIELD_CHUNK_BUDGET = 48 * 1024;
+const FIELD_CHUNK_BUDGET = 32 * 1024;
+const TITLE_BUDGET = 4 * 1024;
 const BOT_LOGIN = 'github-actions[bot]';
 
 interface IssueComment {
@@ -51,7 +52,9 @@ export function safeMarkdown(text: string): string {
     .replaceAll('![', '!\u200b[')
     .replaceAll('](', ']\u200b(')
     .replaceAll('][', ']\u200b[')
-    .replace(/\bhttps?:\/\//gi, (url) => url.replace(':', ':\u200b'));
+    .replaceAll(']:', ']\u200b:')
+    .replace(/\b(?:https?|ftp):\/\//gi, (url) => url.replace(':', ':\u200b'))
+    .replace(/\bwww\./gi, (url) => `w\u200b${url.slice(1)}`);
 }
 
 function markdownBlocks(label: string, text: string): string[] {
@@ -132,7 +135,11 @@ function reportBlocks(manifest: ComparisonManifestV1, result: ArenaResultV1): st
       ? ['No findings reported.']
       : [];
   result.review.findings.forEach((finding, index) => {
-    const title = safeMarkdown(finding.title.replace(/[\r\n]+/g, ' '));
+    const titleChunks = utf8Chunks(
+      safeMarkdown(finding.title.replace(/[\r\n]+/g, ' ')),
+      TITLE_BUDGET,
+    );
+    const title = `${titleChunks[0]}${titleChunks.length > 1 ? '…' : ''}`;
     const location = `${finding.path}:${finding.line}`;
     const details = utf8Chunks(safeMarkdown(finding.body), FIELD_CHUNK_BUDGET);
     const evidence = finding.evidence
@@ -146,14 +153,10 @@ function reportBlocks(manifest: ComparisonManifestV1, result: ArenaResultV1): st
           (detail, detailIndex) =>
             `#### Details · ${detailIndex + 2}/${details.length}\n\n${detail}`,
         ),
-      ...evidence.map((chunk, evidenceIndex) => {
-        const label =
-          evidenceIndex === 0 ? 'Evidence' : `Evidence · ${evidenceIndex + 1}/${evidence.length}`;
-        return chunk
-          .split('\n')
-          .map((line, lineIndex) => `> ${lineIndex === 0 ? `**${label}**\n>\n> ` : ''}${line}`)
-          .join('\n');
-      }),
+      ...evidence.map(
+        (chunk, evidenceIndex) =>
+          `**Evidence${evidence.length > 1 ? ` · ${evidenceIndex + 1}/${evidence.length}` : ''}**\n\n${chunk}`,
+      ),
     );
   });
   return blocks;

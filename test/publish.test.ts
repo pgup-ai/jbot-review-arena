@@ -16,13 +16,15 @@ import { completedResult, fixtureManifest } from './helpers.ts';
 describe('safe publisher rendering', () => {
   it('preserves Markdown formatting while neutralizing active prose', () => {
     const input =
-      '**Bugs**\n- @team #123 <img src=x> ![remote](https://evil.test) [link](https://evil.test)';
+      '**Bugs**\n- @team #123 <img src=x> ![remote](https://evil.test) [link](ftp://evil.test) [shortcut]\n[shortcut]: https://evil.test\nwww.evil.test';
     const rendered = safeMarkdown(input);
     assert.match(rendered, /^\*\*Bugs\*\*\n- /);
     assert.equal(rendered.replaceAll('\u200b', ''), input);
     assert.ok(rendered.includes('@\u200bteam #\u200b123'));
     assert.ok(rendered.includes('<\u200bimg src=x>'));
     assert.ok(rendered.includes('!\u200b[remote]\u200b(https:\u200b//evil.test)'));
+    assert.ok(rendered.includes('[shortcut]\u200b: https:\u200b//evil.test'));
+    assert.ok(rendered.includes('w\u200bww.evil.test'));
   });
 
   it('renders deterministic summary order and splits oversized reports within the byte budget', () => {
@@ -37,8 +39,9 @@ describe('safe publisher rendering', () => {
       path: 'src/a `file`.ts',
       line: 7,
       severity: 'P1',
-      title: '#123 <script>',
+      title: '#123 <script> ' + 't'.repeat(80_000),
       body: '[remote](https://evil.test) ' + 'x'.repeat(80_000),
+      evidence: 'x\n'.repeat(30_000),
     });
     const summary = renderSummary(manifest, [first, second], true);
     assert.ok(summary.indexOf(first.model) < summary.indexOf(second.model));
@@ -51,6 +54,7 @@ describe('safe publisher rendering', () => {
     });
     const rendered = parts.join('\n');
     assert.match(rendered, /### 1\. P1 · #\u200b123 <\u200bscript>/);
+    assert.match(rendered, /t…\n/);
     assert.match(rendered, /\[`` src\/a `file`\.ts:7 ``\]\([^\n]+\/src\/a%20%60file%60\.ts#L7\)/);
     assert.ok(rendered.replaceAll('\u200b', '').includes('[remote](https://evil.test)'));
     assert.doesNotMatch(rendered, /\[remote\]\(https:\/\/evil\.test\)/);
