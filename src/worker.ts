@@ -95,7 +95,7 @@ export function dockerRunArgs(
   manifestPath: string,
   outputDirectory: string,
 ): string[] {
-  const args = [
+  return [
     'run',
     '--rm',
     '--workdir',
@@ -110,9 +110,6 @@ export function dockerRunArgs(
     'MODEL',
     '--env',
     SECRETS_ENV,
-  ];
-  return [
-    ...args,
     '--entrypoint',
     'node',
     `${manifest.jbot.imageRef.split(':').slice(0, -1).join(':')}@${manifest.jbot.imageDigest}`,
