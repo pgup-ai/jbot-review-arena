@@ -8,6 +8,7 @@ import {
   parseJbotOutput,
   parseManifest,
   redactSecrets,
+  redactSecretsFromValue,
   sanitizeFailureMessage,
   validateArenaResult,
   type ArenaFailureClass,
@@ -113,6 +114,7 @@ function resultFromJbot(
   workerMs: number,
   secrets: string[],
 ): ArenaResultV1 {
+  const redactedOutput = redactSecretsFromValue(output, secrets);
   return validateArenaResult(
     {
       schemaVersion: 1,
@@ -120,27 +122,27 @@ function resultFromJbot(
       modelIndex: model.index,
       model: model.model,
       provider: model.provider,
-      status: output.status,
+      status: redactedOutput.status,
       provenance: {
         targetBaseSha: manifest.target.base.sha,
         targetHeadSha: manifest.target.head.sha,
         jbotCommitSha: manifest.jbot.commitSha,
         imageRef: manifest.jbot.imageRef,
         imageDigest: manifest.jbot.imageDigest,
-        backend: output.backend,
-        sdkEngine: output.sdkEngine,
+        backend: redactedOutput.backend,
+        sdkEngine: redactedOutput.sdkEngine,
         workflowRunId: manifest.arena.workflowRunId,
         runAttempt: manifest.arena.runAttempt,
         reviewConfig: manifest.reviewConfig,
-        resolvedModelOptions: output.resolvedModelOptions,
+        resolvedModelOptions: redactedOutput.resolvedModelOptions,
       },
-      timing: { reviewMs: output.reviewMs, workerMs },
-      usage: output.usage,
-      review: output.review,
-      failure: output.failure
+      timing: { reviewMs: redactedOutput.reviewMs, workerMs },
+      usage: redactedOutput.usage,
+      review: redactedOutput.review,
+      failure: redactedOutput.failure
         ? {
-            class: output.failure.class,
-            message: sanitizeFailureMessage(output.failure.message, secrets),
+            class: redactedOutput.failure.class,
+            message: sanitizeFailureMessage(redactedOutput.failure.message, secrets),
           }
         : null,
     },

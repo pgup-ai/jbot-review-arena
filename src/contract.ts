@@ -628,3 +628,17 @@ export function redactSecrets(text: string, secrets: string[]): string {
   for (const secret of secrets.filter(Boolean)) text = text.replaceAll(secret, '[REDACTED]');
   return text;
 }
+
+export function redactSecretsFromValue<T>(value: T, secrets: string[]): T {
+  if (typeof value === 'string') return redactSecrets(value, secrets) as T;
+  if (Array.isArray(value)) return value.map((item) => redactSecretsFromValue(item, secrets)) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        redactSecrets(key, secrets),
+        redactSecretsFromValue(item, secrets),
+      ]),
+    ) as T;
+  }
+  return value;
+}

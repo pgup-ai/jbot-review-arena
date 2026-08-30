@@ -5,6 +5,7 @@ import {
   arenaArtifactName,
   parseJbotOutput,
   parseManifest,
+  redactSecretsFromValue,
   sanitizeFailureMessage,
   validateArenaResult,
 } from '../src/contract.ts';
@@ -82,5 +83,8 @@ describe('versioned contracts', () => {
     );
     assert.doesNotMatch(sanitized, /bearer-value|json-value|user:pass|[\r\n]/);
     assert.ok(Buffer.byteLength(sanitized) <= 512);
+    assert.deepEqual(redactSecretsFromValue({ token: ['prefix-secret', 1] }, ['secret']), {
+      token: ['prefix-[REDACTED]', 1],
+    });
   });
 });
