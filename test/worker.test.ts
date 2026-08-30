@@ -13,8 +13,10 @@ function git(cwd: string, args: string[]): string {
 }
 
 describe('arena worker boundary', () => {
-  it('builds a pinned container invocation with a read-only target and one credential alias', () => {
-    const manifest = fixtureManifest();
+  it('builds a pinned container invocation with only the selected provider auth routes', () => {
+    const manifest = fixtureManifest(['grok/default']);
+    manifest.models[0]!.credentialAlias = 'GROK_AUTH_JSON';
+    manifest.models[0]!.fallbackCredentialAlias = 'XAI_API_KEY';
     const args = dockerRunArgs(
       manifest,
       manifest.models[0]!,
@@ -28,7 +30,8 @@ describe('arena worker boundary', () => {
         'type=bind,src=/control/comparison.json,dst=/run/jbot-comparison/comparison.json,readonly',
       ),
     );
-    assert.ok(args.includes('OPENROUTER_API_KEY'));
+    assert.ok(args.includes('GROK_AUTH_JSON'));
+    assert.ok(args.includes('XAI_API_KEY'));
     assert.doesNotMatch(args.join(' '), /github.token|GITHUB_TOKEN|secret-value/);
     assert.ok(args.includes(`ghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`));
   });

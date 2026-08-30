@@ -92,6 +92,9 @@ jobs:
           ARTIFACT_DIRECTORY: ${{ runner.temp }}/artifact
           MODEL_INDEX: ${{ matrix.index }}
           MODEL_CREDENTIAL: ${{ secrets[matrix.credentialAlias] }}
+          MODEL_FALLBACK_CREDENTIAL: ${{ secrets[matrix.fallbackCredentialAlias] }}
+          MODEL_BASE_URL: ${{ vars[matrix.baseUrlAlias] }}
+          MODEL_BASE_URL_SECRET: ${{ secrets[matrix.baseUrlAlias] }}
         run: node dist/worker.js
       - name: Upload model result
         if: always()

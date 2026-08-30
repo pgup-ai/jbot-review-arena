@@ -15,8 +15,8 @@ arena PR. Target repositories are never modified.
 ## Repository configuration
 
 Set repository variable `JBOT_COMMIT_SHA` to a published 40-character J-Bot
-commit SHA. Configure spend-capped `OPENROUTER_API_KEY` and `NVIDIA_API_KEY`
-repository secrets for the providers you use.
+commit SHA. Provider credentials use the environment names declared by that
+pinned J-Bot image; configure the spend-capped organization secrets you use.
 
 The long-lived arena PR is intentionally content-free; each new `/compare`
 comment creates a new immutable sample.

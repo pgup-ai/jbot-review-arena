@@ -27,6 +27,9 @@ describe('versioned contracts', () => {
     const unsafeModel = structuredClone(manifest);
     unsafeModel.models[0]!.model = 'openrouter/a`\n@team';
     assert.throws(() => parseManifest(JSON.stringify(unsafeModel)), /model is invalid/);
+    const unsafeAlias = structuredClone(manifest);
+    unsafeAlias.models[0]!.credentialAlias = 'GITHUB_TOKEN;echo';
+    assert.throws(() => parseManifest(JSON.stringify(unsafeAlias)), /credentialAlias is invalid/);
   });
 
   it('validates status invariants, metric completeness, provenance, and finding paths', () => {

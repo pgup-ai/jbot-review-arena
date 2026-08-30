@@ -21,6 +21,15 @@ it('freezes fork metadata, image identity, provider aliases, and requested model
     jbotCommitSha: JBOT_SHA,
     imageRepository: 'ghcr.io/pgup-ai/jbot-review',
     imageDigest: IMAGE_DIGEST,
+    resolveAuthRoutes: async (models) =>
+      models.map((model) => ({
+        schemaVersion: 1,
+        model,
+        provider: model.split('/')[0]!,
+        credentialAlias: model.startsWith('nvidia/') ? 'NVIDIA_API_KEY' : 'OPENROUTER_API_KEY',
+        fallbackCredentialAlias: '',
+        baseUrlAlias: '',
+      })),
     resolvePull: async () => ({
       html_url: 'https://github.com/acme/widget/pull/7',
       number: 7,
@@ -52,24 +61,32 @@ it('freezes fork metadata, image identity, provider aliases, and requested model
   assert.equal(manifest.target.body, '');
   assert.equal(manifest.jbot.imageDigest, IMAGE_DIGEST);
   assert.deepEqual(
-    manifest.models.map(({ index, model, provider, credentialAlias }) => ({
-      index,
-      model,
-      provider,
-      credentialAlias,
-    })),
+    manifest.models.map(
+      ({ index, model, provider, credentialAlias, fallbackCredentialAlias, baseUrlAlias }) => ({
+        index,
+        model,
+        provider,
+        credentialAlias,
+        fallbackCredentialAlias,
+        baseUrlAlias,
+      }),
+    ),
     [
       {
         index: 0,
         model: 'nvidia/moonshotai/kimi-k3',
         provider: 'nvidia',
         credentialAlias: 'NVIDIA_API_KEY',
+        fallbackCredentialAlias: '',
+        baseUrlAlias: '',
       },
       {
         index: 1,
         model: 'openrouter/openai/gpt-oss:free',
         provider: 'openrouter',
         credentialAlias: 'OPENROUTER_API_KEY',
+        fallbackCredentialAlias: '',
+        baseUrlAlias: '',
       },
     ],
   );

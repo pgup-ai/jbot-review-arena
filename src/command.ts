@@ -1,5 +1,3 @@
-import { arenaProvider } from './providers.ts';
-
 const MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}\/[A-Za-z0-9._:-]+(?:\/[A-Za-z0-9._:-]+)*$/;
 const TARGET_PATTERN =
   /^https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/([1-9]\d*)$/;
@@ -28,9 +26,6 @@ export function parseCompareCommand(body: string): CompareCommand {
     if (model.length < 3 || model.length > 512 || !MODEL_PATTERN.test(model)) {
       throw new Error(`Invalid model ID: ${model}`);
     }
-    const provider = model.slice(0, model.indexOf('/'));
-    if (!arenaProvider(provider))
-      throw new Error(`Provider is not configured for the arena: ${provider}`);
   }
   return {
     target: {

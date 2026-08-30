@@ -8,7 +8,7 @@ import {
 } from './contract.ts';
 import { assertAuthorizedArenaComment, parseCompareCommand } from './command.ts';
 import { getPublicPullRequest, type GitHubPullRequest } from './github.ts';
-import { arenaProvider } from './providers.ts';
+import { resolveJbotAuthRoutes, type JbotAuthRouteV1 } from './jbot-auth.ts';
 
 interface PrepareInput {
   event: Record<string, unknown>;
@@ -19,6 +19,7 @@ interface PrepareInput {
   imageRepository: string;
   imageDigest: string;
   resolvePull: (owner: string, repo: string, number: number) => Promise<GitHubPullRequest>;
+  resolveAuthRoutes: (models: string[]) => Promise<JbotAuthRouteV1[]>;
 }
 
 function requiredRecord(value: unknown, label: string): Record<string, unknown> {
@@ -54,14 +55,16 @@ export async function prepareComparison(input: PrepareInput): Promise<Comparison
   if (!targetOwner || !targetRepository) throw new Error('Target repository identity is invalid.');
   const commandCommentId = requiredInteger(comment.id, 'comment.id');
   const arenaPrNumber = requiredInteger(issue.number, 'issue.number');
+  const authRoutes = await input.resolveAuthRoutes(command.models);
   const models = command.models.map((model, index) => {
-    const provider = model.slice(0, model.indexOf('/'));
-    const configured = arenaProvider(provider)!;
+    const route = authRoutes[index]!;
     return {
       index,
       model,
-      provider,
-      credentialAlias: configured.credentialAlias,
+      provider: route.provider,
+      credentialAlias: route.credentialAlias,
+      fallbackCredentialAlias: route.fallbackCredentialAlias,
+      baseUrlAlias: route.baseUrlAlias,
       artifactName: arenaArtifactName(index, model),
     };
   });
@@ -122,6 +125,11 @@ async function main(): Promise<void> {
     imageRepository: process.env.JBOT_IMAGE_REPOSITORY ?? '',
     imageDigest: process.env.JBOT_IMAGE_DIGEST ?? '',
     resolvePull: (owner, repo, number) => getPublicPullRequest(owner, repo, number, token),
+    resolveAuthRoutes: async (models) =>
+      resolveJbotAuthRoutes(
+        `${process.env.JBOT_IMAGE_REPOSITORY}@${process.env.JBOT_IMAGE_DIGEST}`,
+        models,
+      ),
   });
   writeFileSync(outputPath, `${JSON.stringify(manifest)}\n`, { flag: 'wx' });
   appendFileSync(
