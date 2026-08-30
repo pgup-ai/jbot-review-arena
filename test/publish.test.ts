@@ -60,7 +60,7 @@ describe('safe publisher rendering', () => {
     assert.match(rendered, /\[`` src\/a `file`\.ts:7 ``\]\([^\n]+\/src\/a%20%60file%60\.ts#L7\)/);
     assert.ok(rendered.replaceAll('\u200b', '').includes('[remote](https://evil.test)'));
     assert.doesNotMatch(rendered, /\[remote\]\(https:\/\/evil\.test\)/);
-    assert.doesNotMatch(rendered, /Finding 1|title|details|part 1\/1|```/);
+    assert.doesNotMatch(rendered, /Finding 1|title|details|part 1\/1/);
     second.review!.summary = '';
     assert.match(renderModelReportParts(manifest, second)[0]!, /No findings reported\./);
     second.review!.summary = '```ts\nunclosed';
@@ -73,6 +73,34 @@ describe('safe publisher rendering', () => {
     assert.doesNotMatch(combined[0]!, /\n```ts/);
     assert.doesNotMatch(combined[0]!, /:model=/);
     assert.ok(renderComparisonComments(manifest, [first, second], false).length > 1);
+  });
+
+  it('renders evidence as bounded code without interpreting Markdown', () => {
+    const manifest = fixtureManifest();
+    const result = completedResult(manifest);
+    const finding = {
+      path: 'src/example.ts',
+      line: 1,
+      severity: 'P2' as const,
+      title: 'Evidence formatting',
+      body: 'Details',
+      evidence: 'const value = `ready`;',
+    };
+    result.review!.findings.push(finding);
+
+    assert.match(
+      renderModelReportParts(manifest, result).join('\n'),
+      /\*\*Evidence\*\*\n\n`` const value = `ready`; ``/,
+    );
+    finding.evidence = '+if (ready) {\n+  run("```")\n+}';
+    assert.match(
+      renderModelReportParts(manifest, result).join('\n'),
+      /\*\*Evidence\*\*\n\n````\n\+if \(ready\) \{\n\+  run\("```"\)\n\+\}\n````/,
+    );
+    finding.evidence = '`'.repeat(32 * 1024);
+    const parts = renderModelReportParts(manifest, result);
+    assert.ok(parts.length > 1);
+    assert.ok(parts.every((part) => Buffer.byteLength(part) <= 60 * 1024));
   });
 
   it('synthesizes missing and invalid artifacts in requested model order', () => {

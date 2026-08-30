@@ -130,6 +130,21 @@ function inlineCode(text: string): string {
   return `${fence} ${text} ${fence}`;
 }
 
+function fencedCode(text: string): string {
+  const longest = Math.max(0, ...[...text.matchAll(/`+/g)].map((match) => match[0].length));
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `${fence}\n${text}\n${fence}`;
+}
+
+function evidenceBlocks(text: string): string[] {
+  const normalized = text.replace(/\r\n?/g, '\n');
+  const multiline = normalized.includes('\n');
+  const chunkBudget = Math.min(FIELD_CHUNK_BUDGET, Math.floor(COMMENT_BUDGET / 4));
+  return utf8Chunks(normalized, chunkBudget).map((chunk) =>
+    multiline ? fencedCode(chunk) : inlineCode(chunk),
+  );
+}
+
 function reportBlocks(manifest: ComparisonManifestV1, result: ArenaResultV1): string[] {
   if (result.failure)
     return markdownBlocks('Failure', `**${result.failure.class}**\n\n${result.failure.message}`);
@@ -147,9 +162,7 @@ function reportBlocks(manifest: ComparisonManifestV1, result: ArenaResultV1): st
     const title = `${titleChunks[0]}${titleChunks.length > 1 ? '…' : ''}`;
     const location = `${finding.path}:${finding.line}`;
     const details = utf8Chunks(safeMarkdown(finding.body), FIELD_CHUNK_BUDGET);
-    const evidence = finding.evidence
-      ? utf8Chunks(safeMarkdown(finding.evidence), FIELD_CHUNK_BUDGET)
-      : [];
+    const evidence = finding.evidence ? evidenceBlocks(finding.evidence) : [];
     blocks.push(
       `### ${index + 1}. ${finding.severity} · ${title}\n\n[${inlineCode(location)}](${targetLocation(manifest, finding)})\n\n${details[0]}`,
       ...details
