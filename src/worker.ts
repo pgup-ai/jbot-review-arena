@@ -29,14 +29,29 @@ class WorkerFailure extends Error {
   }
 }
 
-const AUTH_ENV_PREFIX = 'JBOT_AUTH_';
+const SECRETS_ENV = 'JBOT_AUTH_JSON';
+const GITHUB_TOKEN_NAMES = new Set(['GITHUB_TOKEN', 'GH_TOKEN']);
 
 export function readJbotAuthEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
+  const raw = env[SECRETS_ENV]?.trim();
+  if (!raw) return {};
+  let secrets: unknown;
+  try {
+    secrets = JSON.parse(raw);
+  } catch {
+    throw new Error(`${SECRETS_ENV} must be valid JSON.`);
+  }
+  if (!secrets || typeof secrets !== 'object' || Array.isArray(secrets)) {
+    throw new Error(`${SECRETS_ENV} must be a JSON object.`);
+  }
   return Object.fromEntries(
-    Object.entries(env).flatMap(([name, value]) => {
-      const target = name.startsWith(AUTH_ENV_PREFIX) ? name.slice(AUTH_ENV_PREFIX.length) : '';
-      return value && /^[A-Z][A-Z0-9_]*$/.test(target) ? [[target, value]] : [];
-    }),
+    Object.entries(secrets).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === 'string' &&
+        Boolean(entry[1]) &&
+        /^[A-Z][A-Z0-9_]*$/.test(entry[0]) &&
+        !GITHUB_TOKEN_NAMES.has(entry[0]),
+    ),
   );
 }
 
@@ -79,7 +94,6 @@ export function dockerRunArgs(
   workspace: string,
   manifestPath: string,
   outputDirectory: string,
-  authNames: string[],
 ): string[] {
   const args = [
     'run',
@@ -94,8 +108,9 @@ export function dockerRunArgs(
     `type=bind,src=${outputDirectory},dst=/out`,
     '--env',
     'MODEL',
+    '--env',
+    SECRETS_ENV,
   ];
-  for (const name of authNames) args.push('--env', name);
   return [
     ...args,
     '--entrypoint',
@@ -230,22 +245,13 @@ export function runArenaWorker(params: {
     pullAndVerifyImage(params.manifest);
     const env: NodeJS.ProcessEnv = {
       ...process.env,
-      ...params.authEnvironment,
+      [SECRETS_ENV]: JSON.stringify(params.authEnvironment),
       MODEL: params.model.model,
     };
-    for (const name of Object.keys(env)) {
-      if (name.startsWith(AUTH_ENV_PREFIX)) delete env[name];
-    }
     const timeout = (params.manifest.reviewConfig.timeBudgetMinutes + 5) * 60_000;
     const child = spawnSync(
       'docker',
-      dockerRunArgs(
-        params.manifest,
-        workspace,
-        resolve(params.manifestPath),
-        outputDirectory,
-        Object.keys(params.authEnvironment),
-      ),
+      dockerRunArgs(params.manifest, workspace, resolve(params.manifestPath), outputDirectory),
       { env, encoding: 'utf8', stdio: 'pipe', timeout, maxBuffer: 4 * 1024 * 1024 },
     );
     const workerMs = Math.round(performance.now() - startedAt);

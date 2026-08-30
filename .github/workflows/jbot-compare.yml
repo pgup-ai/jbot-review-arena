@@ -91,30 +91,7 @@ jobs:
           COMPARISON_MANIFEST: ${{ runner.temp }}/control/comparison.json
           ARTIFACT_DIRECTORY: ${{ runner.temp }}/artifact
           MODEL_INDEX: ${{ matrix.index }}
-          JBOT_AUTH_OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          JBOT_AUTH_DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          JBOT_AUTH_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          JBOT_AUTH_JBOT_OPENAI_COMPATIBLE_API_KEY: ${{ secrets.JBOT_OPENAI_COMPATIBLE_API_KEY }}
-          JBOT_AUTH_JBOT_OPENAI_COMPATIBLE_BASE_URL: ${{ secrets.JBOT_OPENAI_COMPATIBLE_BASE_URL || vars.JBOT_OPENAI_COMPATIBLE_BASE_URL }}
-          JBOT_AUTH_ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          JBOT_AUTH_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          JBOT_AUTH_OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          JBOT_AUTH_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
-          JBOT_AUTH_ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
-          JBOT_AUTH_KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          JBOT_AUTH_XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-          JBOT_AUTH_FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
-          JBOT_AUTH_MIMO_API_KEY: ${{ secrets.MIMO_API_KEY }}
-          JBOT_AUTH_DEVIN_WINDSURF_API_KEY: ${{ secrets.DEVIN_WINDSURF_API_KEY }}
-          JBOT_AUTH_COMMANDCODE_ACCESS_KEY: ${{ secrets.COMMANDCODE_ACCESS_KEY }}
-          JBOT_AUTH_CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          JBOT_AUTH_POOLSIDE_API_KEY: ${{ secrets.POOLSIDE_API_KEY }}
-          JBOT_AUTH_QODER_PERSONAL_ACCESS_TOKEN: ${{ secrets.QODER_PERSONAL_ACCESS_TOKEN }}
-          JBOT_AUTH_CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
-          JBOT_AUTH_CLINE_AUTH_JSON: ${{ secrets.CLINE_AUTH_JSON }}
-          JBOT_AUTH_GROK_AUTH_JSON: ${{ secrets.GROK_AUTH_JSON }}
-          JBOT_AUTH_KILO_AUTH_CONTENT: ${{ secrets.KILO_AUTH_CONTENT }}
-          JBOT_AUTH_DIM_AUTH_BUNDLE: ${{ secrets.DIM_AUTH_BUNDLE }}
+          JBOT_AUTH_JSON: ${{ toJSON(secrets) }}
         run: node dist/worker.js
       - name: Upload model result
         if: always()

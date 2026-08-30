@@ -21,27 +21,33 @@ describe('arena worker boundary', () => {
   it('builds a pinned container invocation with J-Bot auth isolated from runner tokens', () => {
     const manifest = fixtureManifest(['cline/cline-free/model']);
     const auth = readJbotAuthEnvironment({
-      JBOT_AUTH_CLINE_AUTH_JSON: 'secret-value',
-      JBOT_AUTH_EMPTY: '',
-      GITHUB_TOKEN: 'github-token',
+      JBOT_AUTH_JSON: JSON.stringify({
+        CLINE_AUTH_JSON: 'secret-value',
+        FUTURE_PROVIDER_TOKEN: 'future-secret',
+        EMPTY: '',
+        github_token: 'automatic-token',
+        GITHUB_TOKEN: 'github-token',
+        GH_TOKEN: 'gh-token',
+      }),
     });
-    assert.deepEqual(auth, { CLINE_AUTH_JSON: 'secret-value' });
-    const args = dockerRunArgs(
-      manifest,
-      '/target',
-      '/control/comparison.json',
-      '/out',
-      Object.keys(auth),
-    );
+    assert.deepEqual(auth, {
+      CLINE_AUTH_JSON: 'secret-value',
+      FUTURE_PROVIDER_TOKEN: 'future-secret',
+    });
+    const args = dockerRunArgs(manifest, '/target', '/control/comparison.json', '/out');
     assert.ok(args.includes('type=bind,src=/target,dst=/workspace,readonly'));
     assert.ok(
       args.includes(
         'type=bind,src=/control/comparison.json,dst=/run/jbot-comparison/comparison.json,readonly',
       ),
     );
-    assert.ok(args.includes('CLINE_AUTH_JSON'));
-    assert.doesNotMatch(args.join(' '), /github.token|GITHUB_TOKEN|secret-value/);
+    assert.ok(args.includes('JBOT_AUTH_JSON'));
+    assert.doesNotMatch(
+      args.join(' '),
+      /CLINE_AUTH_JSON|FUTURE_PROVIDER_TOKEN|github.token|GITHUB_TOKEN|GH_TOKEN|secret-value/,
+    );
     assert.ok(args.includes(`ghcr.io/pgup-ai/jbot-review@${manifest.jbot.imageDigest}`));
+    assert.throws(() => readJbotAuthEnvironment({ JBOT_AUTH_JSON: '[]' }), /must be a JSON object/);
   });
 
   it('materializes exact fork head/base commits and leaves a clean detached checkout', () => {
