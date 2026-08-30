@@ -95,7 +95,6 @@ export function renderSummary(
 
 Target: [${manifest.target.owner}/${manifest.target.repository}#${manifest.target.prNumber}](${manifest.target.url})<br>
 Frozen head: \`${manifest.target.head.sha}\`<br>
-J-Bot: \`${manifest.jbot.commitSha}\`<br>
 Image: \`${manifest.jbot.imageDigest}\`${historical ? '  \n\n> The target PR advanced after preparation; these results are a historical snapshot.' : ''}
 
 | Model | Status | Review ms | Worker ms | Findings | Input tokens | Output tokens | Cost |
@@ -161,7 +160,6 @@ function missingResult(manifest: ComparisonManifestV1, model: ComparisonModelV1)
       provenance: {
         targetBaseSha: manifest.target.base.sha,
         targetHeadSha: manifest.target.head.sha,
-        jbotCommitSha: manifest.jbot.commitSha,
         imageRef: manifest.jbot.imageRef,
         imageDigest: manifest.jbot.imageDigest,
         backend: null,

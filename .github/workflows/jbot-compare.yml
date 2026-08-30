@@ -38,18 +38,14 @@ jobs:
           set -euo pipefail
           image="$JBOT_IMAGE_REPOSITORY:latest"
           docker pull --quiet "$image"
-          commit_sha="$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
-          [[ "$commit_sha" =~ ^[0-9a-f]{40}$ ]]
           pinned="$(docker image inspect "$image" --format '{{index .RepoDigests 0}}')"
           digest="${pinned##*@}"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: Freeze comparison
         id: prepare
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          JBOT_COMMIT_SHA: ${{ steps.image.outputs.commit_sha }}
           JBOT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
           COMPARISON_OUTPUT: ${{ runner.temp }}/comparison.json
         run: node dist/prepare.js
