@@ -81,7 +81,7 @@ export function materializeTarget(manifest: ComparisonManifestV1, workspace: str
     }
     run('git', ['cat-file', '-e', `${manifest.target.base.sha}^{commit}`], workspace);
     run('git', ['merge-base', manifest.target.base.sha, manifest.target.head.sha], workspace);
-    // Hydrate base blobs before the checkout is mounted read-only.
+    // Hydrate the merge-base diff before the checkout is mounted read-only.
     execFileSync(
       'git',
       [
@@ -89,8 +89,7 @@ export function materializeTarget(manifest: ComparisonManifestV1, workspace: str
         '--no-ext-diff',
         '--no-textconv',
         '--find-renames',
-        manifest.target.base.sha,
-        manifest.target.head.sha,
+        `${manifest.target.base.sha}...${manifest.target.head.sha}`,
       ],
       { cwd: workspace, stdio: 'ignore' },
     );
