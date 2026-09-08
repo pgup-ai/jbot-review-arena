@@ -22,3 +22,8 @@ J-Bot image.
 
 The long-lived arena PR is intentionally content-free; each new `/compare`
 comment creates a new immutable sample.
+
+CommandCode tool access is frozen in `reviewConfig.commandCodeTools` and retained
+in result provenance. Set the Arena repository variable `JBOT_COMMANDCODE_TOOLS`
+to `false` to disable it; unset or blank enables it. This requires a J-Bot image
+containing the manifest support from [jbot-review #206](https://github.com/pgup-ai/jbot-review/pull/206).

@@ -41,6 +41,7 @@ export interface ReviewConfigV1 {
   contextTrim: boolean;
   embeddedFirstPrompt: boolean;
   guidelineWiden: 'auto' | 'full';
+  commandCodeTools: boolean;
   verifierSlimContext: boolean;
   verifyOverlapGrace: boolean;
 }
@@ -173,6 +174,7 @@ export const DEFAULT_REVIEW_CONFIG: ReviewConfigV1 = {
   contextTrim: false,
   embeddedFirstPrompt: true,
   guidelineWiden: 'auto',
+  commandCodeTools: true,
   verifierSlimContext: false,
   verifyOverlapGrace: false,
 };
@@ -225,12 +227,16 @@ function integer(value: unknown, label: string, minimum = 0): number {
 
 function reviewConfig(input: unknown, label: string): ReviewConfigV1 {
   const value = record(input, label);
+  const commandCodeTools = value.commandCodeTools === undefined ? true : value.commandCodeTools;
+  if (typeof commandCodeTools !== 'boolean')
+    throw new Error(`${label}.commandCodeTools is invalid.`);
   for (const [key, expected] of Object.entries(DEFAULT_REVIEW_CONFIG)) {
+    if (key === 'commandCodeTools') continue;
     if (JSON.stringify(value[key]) !== JSON.stringify(expected)) {
       throw new Error(`${label}.${key} is invalid.`);
     }
   }
-  return { ...DEFAULT_REVIEW_CONFIG };
+  return { ...DEFAULT_REVIEW_CONFIG, commandCodeTools };
 }
 
 export function arenaArtifactName(index: number, model: string): string {

@@ -16,6 +16,7 @@ interface PrepareInput {
   runAttempt: number;
   imageRepository: string;
   imageDigest: string;
+  commandCodeTools?: boolean;
   resolvePull: (owner: string, repo: string, number: number) => Promise<GitHubPullRequest>;
 }
 
@@ -94,7 +95,7 @@ export async function prepareComparison(input: PrepareInput): Promise<Comparison
       imageRef: `${input.imageRepository}:latest`,
       imageDigest: input.imageDigest,
     },
-    reviewConfig: DEFAULT_REVIEW_CONFIG,
+    reviewConfig: { ...DEFAULT_REVIEW_CONFIG, commandCodeTools: input.commandCodeTools ?? true },
     models,
   });
 }
@@ -114,6 +115,7 @@ async function main(): Promise<void> {
     runAttempt: Number(process.env.GITHUB_RUN_ATTEMPT),
     imageRepository: process.env.JBOT_IMAGE_REPOSITORY ?? '',
     imageDigest: process.env.JBOT_IMAGE_DIGEST ?? '',
+    commandCodeTools: process.env.JBOT_COMMANDCODE_TOOLS?.trim().toLowerCase() !== 'false',
     resolvePull: (owner, repo, number) => getPublicPullRequest(owner, repo, number, token),
   });
   writeFileSync(outputPath, `${JSON.stringify(manifest)}\n`, { flag: 'wx' });

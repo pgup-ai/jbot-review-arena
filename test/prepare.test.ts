@@ -18,6 +18,7 @@ it('freezes fork metadata, image identity, and requested model order', async () 
     arenaRepository: 'pgup-ai/jbot-review-arena',
     workflowRunId: 123,
     runAttempt: 2,
+    commandCodeTools: false,
     imageRepository: 'ghcr.io/pgup-ai/jbot-review',
     imageDigest: IMAGE_DIGEST,
     resolvePull: async () => ({
@@ -49,6 +50,7 @@ it('freezes fork metadata, image identity, and requested model order', async () 
   assert.equal(manifest.comparisonId, 'pgup-ai/jbot-review-arena:pr-5:comment-99');
   assert.equal(manifest.target.head.repository, 'contributor/widget');
   assert.equal(manifest.target.body, '');
+  assert.equal(manifest.reviewConfig.commandCodeTools, false);
   assert.equal(manifest.jbot.imageDigest, IMAGE_DIGEST);
   assert.deepEqual(
     manifest.models.map(({ index, model, provider }) => ({ index, model, provider })),

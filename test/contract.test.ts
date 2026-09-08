@@ -18,6 +18,23 @@ describe('versioned contracts', () => {
     const manifest = fixtureManifest();
     assert.deepEqual(parseManifest(JSON.stringify(manifest)), manifest);
     assert.equal(manifest.models[0]!.artifactName, arenaArtifactName(0, manifest.models[0]!.model));
+    for (const enabled of [false, true]) {
+      const configured = structuredClone(manifest);
+      configured.reviewConfig.commandCodeTools = enabled;
+      const parsed = parseManifest(JSON.stringify(configured));
+      assert.equal(parsed.reviewConfig.commandCodeTools, enabled);
+      assert.equal(
+        validateArenaResult(completedResult(parsed), parsed).provenance.reviewConfig
+          .commandCodeTools,
+        enabled,
+      );
+    }
+    const missingTools = structuredClone(manifest);
+    Reflect.deleteProperty(missingTools.reviewConfig, 'commandCodeTools');
+    assert.equal(parseManifest(JSON.stringify(missingTools)).reviewConfig.commandCodeTools, true);
+    const invalidTools = structuredClone(manifest);
+    Object.assign(invalidTools.reviewConfig, { commandCodeTools: 'false' });
+    assert.throws(() => parseManifest(JSON.stringify(invalidTools)), /commandCodeTools/);
     const invalid = structuredClone(manifest);
     invalid.models[0]!.artifactName = 'model-0-user-input';
     assert.throws(() => parseManifest(JSON.stringify(invalid)), /inconsistent/);

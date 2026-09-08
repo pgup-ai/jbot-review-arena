@@ -47,6 +47,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           JBOT_IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          JBOT_COMMANDCODE_TOOLS: ${{ vars.JBOT_COMMANDCODE_TOOLS }}
           COMPARISON_OUTPUT: ${{ runner.temp }}/comparison.json
         run: node dist/prepare.js
       - uses: actions/upload-artifact@v6
